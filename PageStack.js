@@ -124,37 +124,43 @@ var PageStack = (function(global, $) {
         },
 
         createPage : function() {
-
+            // TODO
         },
 
         /** Opens specified page, or hides current one if page is null/empty */
         openPage : function(page, options) {
             var current = this.getActivePage();
+
             if (page && page.length && current.length && page[0] === current[0]) return;
+
+            // cancel currently loading
+            if (this.isLoading()) this.cancelLoad(true);
+
             // close current
             if (current.length) {
-                current.trigger('page-close.pagestack', [this]);
-                current.removeClass(this.options.pageActiveClass);
                 // when replacing, mark the current as temporary
                 if (options.replace) {
                     current.addClass(this.options.tempClass);
                 }
-                this._animatePage(current, 'hide', options);
+                this._onPageClose(current, options);
             }
             // open new
             if (page && page.length) {
-                page.addClass('active');
-                
+                this._onPageOpen(page, options);
+            }
+            // animate!
+            if (current.length) {
+                this._animatePage(current, 'hide', options, function() {
+                    this._animatePage(page, 'show', options);
+                });
+            } else {
                 this._animatePage(page, 'show', options);
-                
-                this._onPageOpened(page, false);
             }
         },
 
         openUrl : function(url, options) {
             // TODO
 /*
-            if (this.isLoading()) this.cancelLoad(true);
             var page;
             if (url) page = this.getPage(url);
             var current = this.getActivePage();
@@ -177,6 +183,48 @@ var PageStack = (function(global, $) {
             } else {
                 this.showLoader(true);
             }
+
+
+        var me = this;
+        
+        try {
+            this.loading = jQuery.ajax({
+                url : this.prepareLoadUrl(url),
+                type : 'get',
+                dataType : 'html',
+                //crossDomain : true,
+                success : function(data) {
+                    me.onPageLoaded(url, data);
+                },
+                error : function(e) {
+                    if (e.statusText == 'abort') return;
+                    me.onPageLoadError(e, 'Niestety wystąpił błąd. Spróbuj ponownie.');
+                }
+            });
+        } catch (e) {
+            console.log('FAILED!');
+            console.log(e);
+        }    
+
+
+        onPageLoaded : function(url, pageElement) {
+            this.loading = null;
+            this.showLoader(false);
+            // remove any temp pages...
+            //$(this.$page + '.temp', this.pagesDom).detach();
+            if (typeof(pageElement) == "string") {
+                var html = $('<div></div>');
+                html.get(0).innerHTML = pageElement;
+                pageElement = html.find('.page');
+                // move anything before 'page' tag after it...
+    //            pageElement = pageElement.replace(/^([\s\S]*)(<div [^>]*class="[^"]*page[ "][^>]*>)/, '$2$1');            
+                $(this.pagesDom).append(pageElement);
+            }
+            var page = this.addPage(url, pageElement);
+            $(window).trigger('page-ready.pagestack', [page]);
+            this.doOpenPage(page);
+
+        },
 */
         },
 
@@ -185,7 +233,7 @@ var PageStack = (function(global, $) {
         },
 
         openDeferred: function(deferred, options) {
-
+            // TODO
         },
 
         /** Close current page */
@@ -248,7 +296,7 @@ var PageStack = (function(global, $) {
          * @param type show|hide
          * @param forward true|false
          **/
-        _animatePage : function(page, type, options) {
+        _animatePage : function(page, type, options, next) {
             // TODO
 /*            var width = $(this.pagesDom).innerWidth() + 60;
             if (this.reverseAnimation) forward = !forward;
@@ -267,7 +315,7 @@ var PageStack = (function(global, $) {
 */      
         },
         
-        _onAnimationFinished : function(page, type, options) {
+        _onAnimationFinished : function(page, type, options, next) {
             // TODO
 /*            if (type == 'hide') {
                 page.css('display', 'none');
@@ -311,12 +359,36 @@ var PageStack = (function(global, $) {
 
         },
 
-        _onPageOpen : function(page) {
+        _onPageClose : function(page, options) {
+            current.removeClass(this.options.pageActiveClass);
+            page.trigger('page-close.pagestack', [this]);
+        },
+
+        _onPageOpen : function(page, options) {
+            page.addClass('active');
             page.trigger('page-open.pagestack', [this]);
-            
             this.cleanupOldPages();
         },
 
+        _onPageClosed : function(page, options) {
+            page.trigger('page-closed.pagestack', [this]);
+        },
+
+        _onPageOpened : function(page, options) {
+            page.trigger('page-opened.pagestack', [this]);
+        },
+
+
+        _onPageLoadError : function(e, message) {
+            // TODO
+/*            if (e.statusText == 'abort') return;
+            console.log('doLoadPage error ' + e.statusText);
+            console.log(e);
+    //                me.onPageLoaded(url, e.responseText);
+            if (!message) message = 'Niestety wystąpił błąd. Spróbuj ponownie.';
+            //Zasieg.showErrorPopup(message, 'pageload');
+            this.cancelLoad();
+*/        },
     };
 
     return PageStack;   
