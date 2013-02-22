@@ -16,10 +16,15 @@ var PageStack = (function(global, $) {
 
         this._initialize();
 
-    }
+    };
 
     PageStack.ATTR_CONTAINER = 'data-ps-container';
     PageStack.ATTR_PAGE = 'data-ps-page';
+    PageStack.ATTR_URL = 'data-ps-url';
+    PageStack.uniqueId = 1;
+
+    PageStack.animations = {
+    };
 
     PageStack.prototype = {
 
@@ -27,16 +32,20 @@ var PageStack = (function(global, $) {
         $pagesContainer : null,
         $navContainer : null,
 
+        _loading : null,
+
         /** Default options */
-        options = {
+        options : {
+            id              : null,
             container       : 'body',
             pagesContainer  : '.ps-pages',
             navContainer    : '.ps-nav',
 
-            pageSelector    : '.ps-page',
+            pageSelector    : null,
             navSelector     : 'a',
             linkSelector    : 'a',
 
+            pageClass       : 'ps-page',
             pageActiveClass : 'ps-active',
             linkActiveClass : 'ps-active',
             removingClass   : 'ps-removing',
@@ -45,26 +54,57 @@ var PageStack = (function(global, $) {
             linkCloseClass  : 'ps-close',
             linkReplaceClass: 'ps-replace',
             linkReverseClass: 'ps-reverse',
-        };
+            animatePrefixClass: 'ps-animate-',
+
+            animation       : 'slide',
+            animation_show  : null,
+            animation_hide  : null,
+            animation_loaded: 'fade',
+            animationOverlap: false,
+            animationDelay  : 0,
+            animationDuration: 300,
+
+            pageTemplate    : '',
+            /** TRUE - placeholder page will be show, replaced inplace with loaded content
+                FALSE - current page will be closed. Container will have ps-loading class set
+                NULL - nothing will happen. Container will have ps-loading class set
+             */
+            showLoadingPage : null
+        },
 
         /** Initialize PageStack */
         _initialize : function() {
             var self = this;
+            if (!this.options.id) this.options.id = PageStack.uniqueId++;
+            if (!this.options.pageSelector) this.options.pageSelector = '.' + this.options.pageClass;
             this.$container = this._resolveSelector(this.options.container)
                 .on('click', this.options.linkSelector, $.proxy(_onLinkClick, this))
-                .attr(PageStack.ATTR_CONTAINER, 1)
+                .attr(PageStack.ATTR_CONTAINER, this.options.id)
                 .data('pagestack', this)
                 ;
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container);
             this.$navContainer = this._resolveSelector(this.options.navContainer, this.$container);
 
-            // initialize existing pages 
-            this.getPages().each(function() {self._initializePage($(this));});
-            $(global).trigger('page-ready.pagestack', [this, this.getPages()]);
-            // fake-open existing active/last one
-            this.getActivePage(true)
-                .trigger('page-open.pagestack', [this])
-                .trigger('page-opened.pagestack', [this]);
+            // allow other stacks to initialize
+            setTimeout($.proxy(function() {
+                // initialize existing pages 
+                var pages = this.getPagesContainer().find(this.options.pageSelector)
+                    // but not pages of another pagestack
+                    .not(
+                        this.getPagesContainer().children('[' + PageStack.ATTR_CONTAINER + ']').find(this.options.pageSelector)
+                    );
+                pages.each(function() {self._initializePage($(this), {
+                    url : window.location.toString().replace(window.location.origin, '')
+                });});
+
+                // fake-open existing active/last one
+                var active = this.getActivePage(true);
+                if (active.length) {
+                    this._onPageOpen(page, {});
+                    this._onPageOpened(page, {});
+                }
+            }, this), 0);
+
         },
 
         /** Initialize this pagestack as the global one - handling address changes and unhandled urls... */
@@ -72,8 +112,12 @@ var PageStack = (function(global, $) {
 
         },
 
-        _initializePage : function(page) {
-
+        _initializePage : function(page, options) {
+            if (options.url && !page.attr(PageStack.ATTR_URL)) {
+                page.attr(PageStack.ATTR_URL, options.url);
+            }
+            page.attr(PageStack.ATTR_PAGE, this.options.id);
+            $(global).trigger('page-ready.pagestack', [this, page]);
         },
 
         getContainer : function() {
@@ -90,7 +134,9 @@ var PageStack = (function(global, $) {
             @return jQuery
         */
         getPages : function() {
-            return this.getPagesContainer().find(this.options.pageSelector);
+            return this.getPagesContainer()
+                .find(this.options.pageSelector)
+                .filter('[' + PageStack.ATTR_PAGE + '="' + this.options.id + '"]');
         },
 
         /** Returns active page. 
@@ -105,8 +151,11 @@ var PageStack = (function(global, $) {
         /** Returns last page. 
             @return jQuery
         */
-        getLastPage : function(useLast) {
-            return this.getPages().filter(':not(.' + this.options.removingClass + '):last').first();
+        getLastPage : function(selector) {
+            return this.getPages()
+                .filter(':not(.' + this.options.removingClass + ')')
+                .filter(selector ? selector : '*')
+                .last();
         },
 
         /** Tries to find global page with a given url and reopen all necessary pagestacks.
@@ -120,11 +169,59 @@ var PageStack = (function(global, $) {
             @return jQuery
         */
         getPage : function(url) {
-            // TODO
+            var selector = '[' + PageStack.ATTR_URL + '="' + encodeURI(url) + '"]';
+            if (url[0] === '#') selector += ', #' + url.substr(1);
+            return this.getPages().filter(selector).first();
         },
 
-        createPage : function() {
-            // TODO
+        getPageUrl : function(page) {
+            return page.attr(PageStack.ATTR_URL);
+        },
+
+        /** 
+        @param content Content to fill the page
+        @param page Existing page to reuse (jQuery)
+         */
+        createPage : function(content, page, options) {
+            if (!options) options = {};
+
+            content = $(content);
+
+            if (!page || page.length === 0) {
+                if (content && content.hasClass(this.options.pageClass)) {
+                    page = content;
+                } else {
+                    page = $(this.options.pageTemplate)
+                            .addClass(this.options.pageClass)
+                            ;
+                    page.append(content);
+                }
+            } else {
+                // reuse current page...
+                if (content && content.hasClass(this.options.pageClass)) {
+                    // we will have to unwrap it and copy the attributes...
+                    for (var attr, i = 0, attrs = content.get(0).attributes, l = attrs.length; i<l; ++i) {
+                        attr = attrs.item(i);
+                        page.attr(attr.nodeName, attr.nodeValue);
+                        content.attr(attr.nodeName, '');
+                    }
+                    page.append(content);
+                    content.unwrap();
+                } else {
+                    page.append(content);
+                }
+                // animate...
+                this._animatePage(page, 'loaded', options);
+            }
+
+            // initialize, even again...
+            this._initializePage(page, options);
+
+            // open again if already active
+            if (page.hasClass(this.options.pageActiveClass)) {
+                this._onPageOpen(page, options);
+                this._onPageOpened(page, options);
+            }
         },
 
         /** Opens specified page, or hides current one if page is null/empty */
@@ -150,111 +247,141 @@ var PageStack = (function(global, $) {
             }
             // animate!
             if (current.length) {
-                this._animatePage(current, 'hide', options, function() {
-                    this._animatePage(page, 'show', options);
+                this._animatePage(current, 'close', options, function() {
+                    this._animatePage(page, 'open', options);
                 });
             } else {
-                this._animatePage(page, 'show', options);
+                this._animatePage(page, 'open', options);
             }
         },
 
         openUrl : function(url, options) {
-            // TODO
-/*
-            var page;
-            if (url) page = this.getPage(url);
-            var current = this.getActivePage();
-            if (page && page.length && current.length && page[0] === current[0]) return;
-            if (current.length) {
-                current.trigger('page-close.pagestack', [this]);
-                if (options.replace) {
-                    current.addClass(this.options.tempClass);
-                }
-                this.doAnimatePage(current, 'hide', true);
-            }
-            
-            if (url) {
-                if (page) {
-                    this.doOpenPage(page);
-                } else {
-                    this.showLoader(true);
-                    this.doLoadPage(url);
-                }
+            var page = options.reload ? null : this.getPage(url),
+                deferred;
+
+            options.url = url;
+            if (page && page.length) {
+                this.openPage(page, options);
+                return page;
             } else {
-                this.showLoader(true);
+
+                try {
+
+                    deferred = jQuery.ajax({
+                        url : this.prepareLoadUrl(url),
+                        type : 'get',
+                        dataType : 'html'
+                    });
+                    return this.openDeferred(deferred, options);
+
+                } catch (err) {
+                    if (console) console.log(err);
+                }    
+
             }
-
-
-        var me = this;
-        
-        try {
-            this.loading = jQuery.ajax({
-                url : this.prepareLoadUrl(url),
-                type : 'get',
-                dataType : 'html',
-                //crossDomain : true,
-                success : function(data) {
-                    me.onPageLoaded(url, data);
-                },
-                error : function(e) {
-                    if (e.statusText == 'abort') return;
-                    me.onPageLoadError(e, 'Niestety wystąpił błąd. Spróbuj ponownie.');
-                }
-            });
-        } catch (e) {
-            console.log('FAILED!');
-            console.log(e);
-        }    
-
-
-        onPageLoaded : function(url, pageElement) {
-            this.loading = null;
-            this.showLoader(false);
-            // remove any temp pages...
-            //$(this.$page + '.temp', this.pagesDom).detach();
-            if (typeof(pageElement) == "string") {
-                var html = $('<div></div>');
-                html.get(0).innerHTML = pageElement;
-                pageElement = html.find('.page');
-                // move anything before 'page' tag after it...
-    //            pageElement = pageElement.replace(/^([\s\S]*)(<div [^>]*class="[^"]*page[ "][^>]*>)/, '$2$1');            
-                $(this.pagesDom).append(pageElement);
-            }
-            var page = this.addPage(url, pageElement);
-            $(window).trigger('page-ready.pagestack', [page]);
-            this.doOpenPage(page);
-
-        },
-*/
         },
 
         openContent : function(content, options) {
-            // TODO
+            page = this.createPage(data, page, options);
+            this.openPage(page);
+            return page;
         },
 
         openDeferred: function(deferred, options) {
-            // TODO
+            var page, self = this;
+
+            this._loading = deferred;
+
+            // show or not a loading page
+            if (this.options.showLoadingPage) {
+                page = this.createPage()
+                    .addClass(this.options.loadingClass)
+                    .addClass(this.options.tempClass)
+                    ;
+                this.openPage(page, options);
+            } else if (this.options.showLoadingPage !== null) {
+                this.openPage(null, options); 
+            } 
+
+            deferred.done(function(data) {
+                if (self._loading === deferred) {
+                    self._onPageLoaded(deferred, data, page, options);
+                }
+            });
+            deferred.fail(function() {
+                if (self._loading === deferred) {
+                    self._onPageLoadError();
+                    self.closePage();
+                }
+            });
+            deferred.always(function() {
+                if (self._loading === deferred) {
+                    self._loading = null;
+                    self.showLoader(false);
+                }
+            });
+
+            return page;
+
+        },
+
+        _onPageLoaded : function(deferred, data, page, options) {
+
+            if (typeof(data) === 'string') {
+                // create out-of-document html
+                var html = $('<div></div>');
+                html.get(0).innerHTML = data;
+                // find the page in the same container
+                var $container = this.getContainer();
+                data = $container.attr('id') ? 
+                        html.find('#' + $container.attr('id'))
+                            .find(this.options.pageSelector).eq(0) 
+                        : null;
+                if (!data || data.length === 0) data = html.find(this.options.pageSelector);
+                // try other parts...
+                if (data.length === 0) data = html.find('body');
+                if (data.length === 0) data = html;
+            }
+
+            if (page && page.length) {
+                // remove temp & loading from the base page...
+                page.removeClass(this.options.loadingClass)
+                    .removeClass(this.options.tempClass);
+            }
+
+            page = this.createPage(data, page, options);
+            this.openPage(page);
+
         },
 
         /** Close current page */
         closePage : function() {
-            // TODO
-            // should open last page if no current
+            this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'));
         },
 
         /** Reload current page */
-        reloadPage : function() {
-            // TODO
+        reloadPage : function(page) {
+            if (!page) page = this.getActivePage();
+            if (!page.length) return;
+            var url = this.getPageUrl(page);
+            if (!url) return;
+            this.openUrl(url, {reload:true});
         },
 
         /** Cancel currently loading page. Bring back the last one... */
         cancelLoad : function(justCancel) {
-            // TODO
+            if (this._loading) {
+                this.abort();
+                self._loading = null;
+                self.showLoader(false);
+            }
+            if (justCancel) return;
+            this.openPage(this.getLastPage());
         },
 
         isLoading:function() {
-            // TODO
-        }
+            return this._loading !== null;
+        },
 
         /** Show/hide loading information */
         showLoader:function(show) {
@@ -297,37 +424,42 @@ var PageStack = (function(global, $) {
          * @param forward true|false
          **/
         _animatePage : function(page, type, options, next) {
-            // TODO
-/*            var width = $(this.pagesDom).innerWidth() + 60;
-            if (this.reverseAnimation) forward = !forward;
-            if (type == 'show') {
-                page.css('left', (forward ? 1 : -1) * width + 'px');
-                page.css('display', 'block');
+            var self = this,
+                animation = (this.options['animation_' + type] !== null ? this.options['animation_' + type]
+                            : this.options.animation);
+            
+            if (animation && typeof(animation) !== 'function')
+                animation = PageStack.animations[animation];
+
+            page.addClass(this.options.animatePrefixClass + type);
+            if (options.reverse) page.addClass(this.options.animatePrefixClass + 'reverse');
+            if (next && this.options.animationDelay) {
+                var oldNext = next;
+                next = function() {setTimeout(oldNext, this.options.animationDelay);};
             }
-            var left = (type == 'show' ? 0 : ((forward ? -1 : 1) * width));
-    //        console.log(left);
-            var me = this;
-            page.animate({
-                left : left + 'px'
-            }, this.animationTime, false, function() { 
-                me.onAnimationFinished($(this), type, forward);
-            });
-*/      
+
+            if (animation) {
+                animation(page, type, this.options.animationDuration, options, function() {
+                    self._onAnimationFinished(page, type, options);
+                    if (next && !this.options.animationOverlap) {
+                        next();
+                    }
+                });
+            }
+            if (next && this.options.animationOverlap) {
+                next();
+            }
         },
         
-        _onAnimationFinished : function(page, type, options, next) {
-            // TODO
-/*            if (type == 'hide') {
-                page.css('display', 'none');
-                page.trigger('page-closed.pagestack', [page]);
-            } else if (type == 'show') {
-                page.trigger('page-opened.pagestack', [page]);
+        _onAnimationFinished : function(page, type, options) {
+            page.removeClass(this.options.animatePrefixClass + type)
+                .removeClass(this.options.animatePrefixClass + 'reverse')
+                ;
+            if (type === 'close') {
+                this._onPageClosed(page, options);
+            } else if (type === 'open') {
+                this._onPageOpened(page, options);
             }
-            if (page.hasClass('removing')) {
-                page.detach();
-                page = null;
-            }
-*/      
         },
 
         _onLinkClick : function(e) {
@@ -352,8 +484,8 @@ var PageStack = (function(global, $) {
                         reverse : $link.hasClass(this.options.linkReverseClass)
                     });
 
-            } catch (e) {
-                if (window.console) console.log(e);
+            } catch (err) {
+                if (window.console) console.log(err);
             }
             return false;
 
@@ -371,7 +503,12 @@ var PageStack = (function(global, $) {
         },
 
         _onPageClosed : function(page, options) {
+            page.css('display', 'none');
             page.trigger('page-closed.pagestack', [this]);
+            if (page.hasClass('removing')) {
+                page.detach();
+                page = null;
+            }
         },
 
         _onPageOpened : function(page, options) {
@@ -380,6 +517,7 @@ var PageStack = (function(global, $) {
 
 
         _onPageLoadError : function(e, message) {
+            console.log('page load error!');
             // TODO
 /*            if (e.statusText == 'abort') return;
             console.log('doLoadPage error ' + e.statusText);
@@ -388,8 +526,32 @@ var PageStack = (function(global, $) {
             if (!message) message = 'Niestety wystąpił błąd. Spróbuj ponownie.';
             //Zasieg.showErrorPopup(message, 'pageload');
             this.cancelLoad();
-*/        },
+*/        }
     };
+
+
+    PageStack.animations.slide = function(page, type, duration, options, next) {
+        var width = this.getContainer().innerWidth() + 60,
+            self = this,
+            left = (type !== 'close' ? 0 : ((options.reverse ? 1 : -1) * width))
+        ;
+        if (type !== 'close') {
+            page.css('left', (options.reverse ? -1 : 1) * width + 'px');
+        }
+        page.animate({
+            left : left + 'px'
+        }, duration, false, next);
+    };
+
+    PageStack.animations.fade = function(page, type, duration, options, next) {
+        var open = type !== 'close';
+        if (options.reverse) open = !open;
+        page.css('opacity', open ? 0 : 1);
+        page.animate({
+            opacity : open ? 1 : 0
+        }, duration, false, next);
+    };
+
 
     return PageStack;   
 
