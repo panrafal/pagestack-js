@@ -22,6 +22,9 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
     <head>
         <script src="http://code.jquery.com/jquery-1.9.0.js"></script>
         <script src="http://code.jquery.com/jquery-migrate-1.0.0.js"></script>
+        <!-- Please use your local copy of jquery.transit in your projects! This is here only for testing... -->
+        <!-- <script src="http://ricostacruz.com/jquery.transit/jquery.transit.js"></script> -->
+        <script src="/jquery.transit.js"></script>
         <script src="/pagestack.js"></script>
         <link rel="stylesheet" type="text/css" href="/test/test.css" />
     </head>
@@ -31,7 +34,12 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
                 <li><a href="/test/index.html">[I] Index</a></li>
                 <li><a href="/test/foobar.html">[I] Foobar</a></li>
                 <li><a href="/test/hello_world.html">[I] Hello world</a></li>
-                <li><a href="/test/preloaded-foo-bar-baz.html">[I Preloaded] Foo Bar Baz </a></li>
+                <li><a href="/test/preloaded-foo-bar-baz.html">[I Preloaded] Foo Bar Baz </a>
+                    , <a href="/test/preloaded-foo-bar-baz.html#foo">/Foo </a>
+                    , <a href="/test/preloaded-foo-bar-baz.html#bar">/Bar </a>
+                    , <a href="#foo">#foo </a>
+                    , <a href="#bar">#bar </a>
+                </li>
                 <li><a href="/test/slides-start.html">[II Slides] Start </a></li>
             </ul>
         </div>
@@ -52,7 +60,7 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
 
         <script>
             var pagestack = new PageStack({
-                animation: 'fade'
+                animation : { all : {animation : 'fade'} }
             });
         </script>
     </body>

@@ -9,13 +9,23 @@ a.ps-active {
 
 .ps-pages {
     border:2px solid #800;
-    padding:10px;
-    min-height:60px;
+    padding:2px;
+    min-height:120px;
+    position:relative;
+}
+
+.ps-pages .ps-pages {
+    min-height: 100px
 }
 
 .ps-page {
     border:2px solid #080;
-    position:relative;
+    position:absolute;
+    width:100%;
+    display:none;
+}
+.ps-page.ps-active, .ps-page.ps-animate {
+    display:block;
 }
 .ps-page.ps-active {
     border-size:4px;
