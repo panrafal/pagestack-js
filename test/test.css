@@ -1,0 +1,29 @@
+body {
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+a.ps-active {
+    font-weight:bold;
+}
+
+
+.ps-pages {
+    border:2px solid #800;
+    padding:10px;
+    min-height:60px;
+}
+
+.ps-page {
+    border:2px solid #080;
+    position:relative;
+}
+.ps-page.ps-active {
+    border-size:4px;
+}
+
+
+.ps-slides {
+    border:2px solid #c00;
+    padding:10px;
+}
+

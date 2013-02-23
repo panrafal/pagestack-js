@@ -57,14 +57,14 @@ var PageStack = (function(global, $) {
             animatePrefixClass: 'ps-animate-',
 
             animation       : 'slide',
-            animation_show  : null,
-            animation_hide  : null,
+            animation_open  : undefined,
+            animation_close  : undefined,
             animation_loaded: 'fade',
             animationOverlap: false,
             animationDelay  : 0,
             animationDuration: 300,
 
-            pageTemplate    : '',
+            pageTemplate    : '<div></div>',
             /** TRUE - placeholder page will be show, replaced inplace with loaded content
                 FALSE - current page will be closed. Container will have ps-loading class set
                 NULL - nothing will happen. Container will have ps-loading class set
@@ -78,21 +78,25 @@ var PageStack = (function(global, $) {
             if (!this.options.id) this.options.id = PageStack.uniqueId++;
             if (!this.options.pageSelector) this.options.pageSelector = '.' + this.options.pageClass;
             this.$container = this._resolveSelector(this.options.container)
-                .on('click', this.options.linkSelector, $.proxy(_onLinkClick, this))
+                .first()
+                .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
                 .attr(PageStack.ATTR_CONTAINER, this.options.id)
                 .data('pagestack', this)
                 ;
-            this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container);
-            this.$navContainer = this._resolveSelector(this.options.navContainer, this.$container);
+            this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
+                .first();
+            this.$navContainer = this._resolveSelector(this.options.navContainer, this.$container)
+                .first();
 
             // allow other stacks to initialize
-            setTimeout($.proxy(function() {
+            // setTimeout($.proxy(function() {
                 // initialize existing pages 
-                var pages = this.getPagesContainer().find(this.options.pageSelector)
+                var pages = self.getPages();
+/*                this.getPagesContainer().find(this.options.pageSelector)
                     // but not pages of another pagestack
                     .not(
                         this.getPagesContainer().children('[' + PageStack.ATTR_CONTAINER + ']').find(this.options.pageSelector)
-                    );
+                    );*/                
                 pages.each(function() {self._initializePage($(this), {
                     url : window.location.toString().replace(window.location.origin, '')
                 });});
@@ -100,10 +104,10 @@ var PageStack = (function(global, $) {
                 // fake-open existing active/last one
                 var active = this.getActivePage(true);
                 if (active.length) {
-                    this._onPageOpen(page, {});
-                    this._onPageOpened(page, {});
+                    this._onPageOpen(active, {});
+                    this._onPageOpened(active, {});
                 }
-            }, this), 0);
+            // }, this), 0);
 
         },
 
@@ -113,7 +117,7 @@ var PageStack = (function(global, $) {
         },
 
         _initializePage : function(page, options) {
-            if (options.url && !page.attr(PageStack.ATTR_URL)) {
+            if (options.url && !page.attr(PageStack.ATTR_URL) && !page.attr('id')) {
                 page.attr(PageStack.ATTR_URL, options.url);
             }
             page.attr(PageStack.ATTR_PAGE, this.options.id);
@@ -135,8 +139,8 @@ var PageStack = (function(global, $) {
         */
         getPages : function() {
             return this.getPagesContainer()
-                .find(this.options.pageSelector)
-                .filter('[' + PageStack.ATTR_PAGE + '="' + this.options.id + '"]');
+                .children(this.options.pageSelector);
+                // .filter('[' + PageStack.ATTR_PAGE + '="' + this.options.id + '"]');
         },
 
         /** Returns active page. 
@@ -144,8 +148,8 @@ var PageStack = (function(global, $) {
         */
         getActivePage : function(useLast) {
             var selector = '.' + this.options.pageActiveClass;
-            if (useLast) selector += ':last';
-            return this.getPages().filter(selector).first();    
+            if (useLast) selector += ',:last';
+            return this.getPages().filter(selector).last();    
         },
 
         /** Returns last page. 
@@ -196,17 +200,20 @@ var PageStack = (function(global, $) {
                             ;
                     page.append(content);
                 }
+                this.getPagesContainer().append(page);
             } else {
                 // reuse current page...
                 if (content && content.hasClass(this.options.pageClass)) {
                     // we will have to unwrap it and copy the attributes...
-                    for (var attr, i = 0, attrs = content.get(0).attributes, l = attrs.length; i<l; ++i) {
-                        attr = attrs.item(i);
-                        page.attr(attr.nodeName, attr.nodeValue);
-                        content.attr(attr.nodeName, '');
+                    for (var i = 0, attrs = content.get(0).attributes, l = attrs.length; i<l; ++i) {
+                        var name = attrs.item(i).nodeName.toLowerCase(), value = attrs.item(i).nodeValue;
+                        if (name === 'class') value = value + ' ' + page.attr(name) ;
+                        if (name === 'style') value = value + '; ' + page.attr(name) ;
+                        page.attr(name, value);
+                        content.attr(name, '');
                     }
-                    page.append(content);
-                    content.unwrap();
+                    var contentNode = content.get(0), pageNode = page.get(0);
+                    while (contentNode.firstChild) pageNode.appendChild(contentNode.firstChild);
                 } else {
                     page.append(content);
                 }
@@ -222,11 +229,15 @@ var PageStack = (function(global, $) {
                 this._onPageOpen(page, options);
                 this._onPageOpened(page, options);
             }
+
+            return page;
         },
 
         /** Opens specified page, or hides current one if page is null/empty */
         openPage : function(page, options) {
-            var current = this.getActivePage();
+            var current = this.getActivePage(),
+                self = this;
+            if (!options) options = {};
 
             if (page && page.length && current.length && page[0] === current[0]) return;
 
@@ -248,14 +259,15 @@ var PageStack = (function(global, $) {
             // animate!
             if (current.length) {
                 this._animatePage(current, 'close', options, function() {
-                    this._animatePage(page, 'open', options);
+                    if (page && page.length) self._animatePage(page, 'open', options);
                 });
             } else {
-                this._animatePage(page, 'open', options);
+                if (page && page.length) this._animatePage(page, 'open', options);
             }
         },
 
         openUrl : function(url, options) {
+            if (!options) options = {};
             var page = options.reload ? null : this.getPage(url),
                 deferred;
 
@@ -268,7 +280,7 @@ var PageStack = (function(global, $) {
                 try {
 
                     deferred = jQuery.ajax({
-                        url : this.prepareLoadUrl(url),
+                        url : url,
                         type : 'get',
                         dataType : 'html'
                     });
@@ -282,15 +294,15 @@ var PageStack = (function(global, $) {
         },
 
         openContent : function(content, options) {
+            if (!options) options = {};
             page = this.createPage(data, page, options);
             this.openPage(page);
             return page;
         },
 
         openDeferred: function(deferred, options) {
+            if (!options) options = {};
             var page, self = this;
-
-            this._loading = deferred;
 
             // show or not a loading page
             if (this.options.showLoadingPage) {
@@ -303,21 +315,21 @@ var PageStack = (function(global, $) {
                 this.openPage(null, options); 
             } 
 
+            this._loading = deferred;
+
             deferred.done(function(data) {
                 if (self._loading === deferred) {
+                    self._loading = null;
+                    self.showLoader(false);
                     self._onPageLoaded(deferred, data, page, options);
                 }
             });
             deferred.fail(function() {
                 if (self._loading === deferred) {
-                    self._onPageLoadError();
-                    self.closePage();
-                }
-            });
-            deferred.always(function() {
-                if (self._loading === deferred) {
                     self._loading = null;
                     self.showLoader(false);
+                    self._onPageLoadError();
+                    self.closePage();
                 }
             });
 
@@ -335,12 +347,18 @@ var PageStack = (function(global, $) {
                 var $container = this.getContainer();
                 data = $container.attr('id') ? 
                         html.find('#' + $container.attr('id'))
-                            .find(this.options.pageSelector).eq(0) 
+                            .find(this.options.pageSelector).eq(0)
+                            .siblings(this.options.pageSelector).addBack() 
                         : null;
-                if (!data || data.length === 0) data = html.find(this.options.pageSelector);
+                if (!data || data.length === 0) {
+                    // find first-level page and it's siblings
+                    data = html.find(this.options.pageSelector).eq(0)
+                            .siblings(this.options.pageSelector).addBack();
+                }
                 // try other parts...
                 if (data.length === 0) data = html.find('body');
                 if (data.length === 0) data = html;
+                // TODO handle multiple pages
             }
 
             if (page && page.length) {
@@ -356,6 +374,7 @@ var PageStack = (function(global, $) {
 
         /** Close current page */
         closePage : function() {
+            this.getActivePage().addClass(this.options.tempClass);
             this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'));
         },
 
@@ -371,9 +390,9 @@ var PageStack = (function(global, $) {
         /** Cancel currently loading page. Bring back the last one... */
         cancelLoad : function(justCancel) {
             if (this._loading) {
-                this.abort();
-                self._loading = null;
-                self.showLoader(false);
+                this._loading.abort();
+                this._loading = null;
+                this.showLoader(false);
             }
             if (justCancel) return;
             this.openPage(this.getLastPage());
@@ -393,8 +412,12 @@ var PageStack = (function(global, $) {
         },
 
         cleanupOldPages : function() {
+            // this.getPages().filter('.' + this.options.tempClass)
+            //     .not('.' + this.options.pageActiveClass)
+            //     .detach();
+            
             // TODO
-/*            $(this.$page + '.temp', this.pagesDom).not('.active').detach();
+/*            
             // clean all old pages
             if (this.pagesLimit) {
                 var pages = $(this.$page + '[data-url]', this.pagesDom).not('.active,.persist,.removing');
@@ -409,12 +432,12 @@ var PageStack = (function(global, $) {
         _resolveSelector : function(spec, context, alwaysReturn) {
             if (!spec) return alwaysReturn ? $() : null;
             if (spec instanceof jQuery) return spec;
-            if (typeof(spec) === 'function') return spec(context);
+            if (typeof(spec) === 'function') return spec.call(this, context);
             return $(spec, context);
         },
 
         _resolveValue : function(spec) {
-            if (typeof(spec) === 'function') return spec();
+            if (typeof(spec) === 'function') return spec.call(this);
             return spec;
         },
 
@@ -425,7 +448,7 @@ var PageStack = (function(global, $) {
          **/
         _animatePage : function(page, type, options, next) {
             var self = this,
-                animation = (this.options['animation_' + type] !== null ? this.options['animation_' + type]
+                animation = (this.options['animation_' + type] !== undefined ? this.options['animation_' + type]
                             : this.options.animation);
             
             if (animation && typeof(animation) !== 'function')
@@ -438,13 +461,17 @@ var PageStack = (function(global, $) {
                 next = function() {setTimeout(oldNext, this.options.animationDelay);};
             }
 
+            var onFinished = function() {
+                self._onAnimationFinished(page, type, options);
+                if (next && !self.options.animationOverlap) {
+                    next();
+                }
+            }            
+
             if (animation) {
-                animation(page, type, this.options.animationDuration, options, function() {
-                    self._onAnimationFinished(page, type, options);
-                    if (next && !this.options.animationOverlap) {
-                        next();
-                    }
-                });
+                animation.call(this, page, type, this.options.animationDuration, options, onFinished);
+            } else {
+                onFinished();
             }
             if (next && this.options.animationOverlap) {
                 next();
@@ -492,12 +519,18 @@ var PageStack = (function(global, $) {
         },
 
         _onPageClose : function(page, options) {
-            current.removeClass(this.options.pageActiveClass);
+            page.removeClass(this.options.pageActiveClass);
+            if (page.hasClass(this.options.tempClass)) {
+                page.addClass(this.options.removingClass);
+            }
             page.trigger('page-close.pagestack', [this]);
         },
 
+
         _onPageOpen : function(page, options) {
-            page.addClass('active');
+            // reset whatever onPageClosed did...
+            page.css('display', '');
+            page.addClass(this.options.pageActiveClass);
             page.trigger('page-open.pagestack', [this]);
             this.cleanupOldPages();
         },
@@ -505,7 +538,7 @@ var PageStack = (function(global, $) {
         _onPageClosed : function(page, options) {
             page.css('display', 'none');
             page.trigger('page-closed.pagestack', [this]);
-            if (page.hasClass('removing')) {
+            if (page.hasClass(this.options.removingClass)) {
                 page.detach();
                 page = null;
             }
