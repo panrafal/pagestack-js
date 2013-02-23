@@ -31,7 +31,6 @@ var PageStack = (function(global, $) {
 
         $container : null,
         $pagesContainer : null,
-        $navContainer : null,
 
         _loading : null,
 
@@ -40,11 +39,20 @@ var PageStack = (function(global, $) {
             id              : null,
             container       : 'body',
             pagesContainer  : '.ps-pages',
-            navContainer    : '.ps-nav',
+            /** Container with links used for navigation. 
+                They will be marked with linkActiveClass and used for prev/next navigation 
+                Selector, function(context), jQuery(), TRUE to use container, or FALSE to disable
+                */ 
+            navContainer    : true,
 
+            /** Selector for pages. Use null to set it to .pageClass */
             pageSelector    : null,
-            navSelector     : 'a',
+            /** Selector for links used for opening */
             linkSelector    : 'a',
+            /** Selector for links used in navigation. Use TRUE to match linkSelector */
+            navSelector     : true,
+            /** If you want the nav-link parent to also receive linkActiveClass - set it's selector */
+            navParentSelector : null,
 
             pageClass       : 'ps-page',
             pageActiveClass : 'ps-active',
@@ -92,17 +100,17 @@ var PageStack = (function(global, $) {
         /** Initialize PageStack */
         _initialize : function() {
             var self = this;
-            if (!this.options.id) this.options.id = PageStack.uniqueId++;
             if (!this.options.pageSelector) this.options.pageSelector = '.' + this.options.pageClass;
+            if (this.options.navSelector === true) this.options.navSelector = this.options.linkSelector;
             this.$container = this._resolveSelector(this.options.container)
                 .first()
                 .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
-                .attr(PageStack.ATTR_CONTAINER, this.options.id)
                 .data('pagestack', this)
                 ;
+            if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
+            this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
+                
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
-                .first();
-            this.$navContainer = this._resolveSelector(this.options.navContainer, this.$container)
                 .first();
 
             // initialize existing pages 
@@ -142,7 +150,7 @@ var PageStack = (function(global, $) {
             return this.$pagesContainer;
         },
         getNavContainer : function() {
-            return this.$navContainer;
+            return this._resolveSelector(this.options.navContainer, this.$container, true);
         },
 
         /** Returns all pages 
@@ -189,10 +197,39 @@ var PageStack = (function(global, $) {
             return this.getPages().filter(selector).first();
         },
 
-        getPageUrl : function(page) {
-            return page.attr(PageStack.ATTR_URL);
+        getPageUrl : function(page, absolute) {
+            var url = page.attr(PageStack.ATTR_URL);
+            return url;
         },
 
+        getBaseUrl : function() {
+            return this.getContainer().attr(PageStack.ATTR_URL);
+        },
+
+        /** Returns all navigation links */
+        getNavLinks : function() {
+            if (!this.options.navSelector) return $();
+            return this.getNavContainer().find(this.options.navSelector);
+        },
+
+        /** Returns page's navigation link */
+        findPageNavLink : function(page, includeParent) {
+            if (!this.options.navSelector) return $();
+
+            var url = this.getPageUrl(page, true), 
+                selector, hash, result;
+
+            if (!url) return $();
+            selector = '[href="' + encodeURI(url) + '"]';
+            // relative urls too
+            if ((hash = url.indexOf('#')) > 0) selector += ',[href="' + encodeURI(url.substr(hash)) + '"]';
+
+            result = this.getNavLinks().filter(selector);
+
+            // include the nav parent
+            if (includeParent && this.options.navParentSelector) result.parents(this.options.navParentSelector).addBack();
+            return result;
+        },
 
         /** Opens specified page, or hides current one if page is null/empty */
         openPage : function(page, options) {
@@ -398,7 +435,7 @@ var PageStack = (function(global, $) {
         /** Close current page */
         closePage : function() {
             this.getActivePage().addClass(this.options.tempClass);
-            this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'));
+            this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'), {reverse : true});
         },
 
         /** Reload current page */
@@ -454,6 +491,7 @@ var PageStack = (function(global, $) {
 
         _resolveSelector : function(spec, context, alwaysReturn) {
             if (!spec) return alwaysReturn ? $() : null;
+            if (spec === true) return $(context);
             if (spec instanceof jQuery) return spec;
             if (typeof(spec) === 'function') return spec.call(this, context);
             return $(spec, context);
@@ -545,6 +583,7 @@ var PageStack = (function(global, $) {
 
         _onPageClose : function(page, options) {
             page.removeClass(this.options.pageActiveClass);
+            this.findPageNavLink(page, true).removeClass(this.options.linkActiveClass);
             if (page.hasClass(this.options.tempClass)) {
                 page.addClass(this.options.removingClass);
             }
@@ -556,6 +595,7 @@ var PageStack = (function(global, $) {
             // reset whatever onPageClosed did...
             page.css('display', '');
             page.addClass(this.options.pageActiveClass);
+            this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
             this.cleanupOldPages();
         },
@@ -597,6 +637,10 @@ var PageStack = (function(global, $) {
 */        }
     };
 
+    /** Get pagestack for this element */
+    PageStack.getPageStack = function(node) {
+        return $(node).closest('[' + PageStack.ATTR_CONTAINER + ']').data('pagestack');
+    };
 
     PageStack.animations.slide = function(page, type, options, next) {
         var width = this.getContainer().innerWidth() + 60,
