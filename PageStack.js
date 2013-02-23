@@ -21,6 +21,7 @@ var PageStack = (function(global, $) {
     PageStack.ATTR_CONTAINER = 'data-ps-container';
     PageStack.ATTR_PAGE = 'data-ps-page';
     PageStack.ATTR_URL = 'data-ps-url';
+    PageStack.ATTR_PAGEEVENT = 'data-ps-on';
     PageStack.uniqueId = 1;
 
     PageStack.animations = {
@@ -121,7 +122,7 @@ var PageStack = (function(global, $) {
                 page.attr(PageStack.ATTR_URL, options.url);
             }
             page.attr(PageStack.ATTR_PAGE, this.options.id);
-            $(global).trigger('page-ready.pagestack', [this, page]);
+            this._triggerPageEvent(page, 'ready', options);
         },
 
         getContainer : function() {
@@ -523,7 +524,7 @@ var PageStack = (function(global, $) {
             if (page.hasClass(this.options.tempClass)) {
                 page.addClass(this.options.removingClass);
             }
-            page.trigger('page-close.pagestack', [this]);
+            this._triggerPageEvent(page, 'close', options);
         },
 
 
@@ -531,13 +532,13 @@ var PageStack = (function(global, $) {
             // reset whatever onPageClosed did...
             page.css('display', '');
             page.addClass(this.options.pageActiveClass);
-            page.trigger('page-open.pagestack', [this]);
+            this._triggerPageEvent(page, 'open', options);
             this.cleanupOldPages();
         },
 
         _onPageClosed : function(page, options) {
             page.css('display', 'none');
-            page.trigger('page-closed.pagestack', [this]);
+            this._triggerPageEvent(page, 'closed', options);
             if (page.hasClass(this.options.removingClass)) {
                 page.detach();
                 page = null;
@@ -545,9 +546,19 @@ var PageStack = (function(global, $) {
         },
 
         _onPageOpened : function(page, options) {
-            page.trigger('page-opened.pagestack', [this]);
+            this._triggerPageEvent(page, 'opened', options);
         },
 
+        _triggerPageEvent : function(page, event, options) {
+            page.trigger('page-'+event+'.pagestack', [this, options]); 
+    
+            // eval on attributes            
+            var code = page.attr(PageStack.ATTR_PAGEEVENT + event);
+            if (code) {
+                page = page.get(0);
+                eval(code);
+            }
+        },
 
         _onPageLoadError : function(e, message) {
             console.log('page load error!');
