@@ -61,7 +61,7 @@ var PageStack = (function(global, $) {
                 */ 
             navContainer    : true,
 
-            openingUrl      : undefined,
+            initialUrl      : undefined,
 
             /** Selector for pages. Use null to set it to .pageClass */
             pageSelector    : null,
@@ -128,7 +128,15 @@ var PageStack = (function(global, $) {
                 FALSE - current page will be closed. Container will have ps-loading class set
                 NULL - nothing will happen. Container will have ps-loading class set
              */
-            showLoadingPage : null
+            showLoadingPage : null,
+
+            /** Callback function accepting(url, options) and returning:
+             FALSE if URL is not handled at all
+             NULL for default handling
+             STRING with content
+             jQuery with content
+             Deferred object */
+            contentProvider : null
         },
 
         /** Initialize PageStack */
@@ -164,7 +172,7 @@ var PageStack = (function(global, $) {
                         url = parentStack.getPageUrl( parentStack.getPages().has(this.$container) ) || parentStack.getBaseUrl();
                     } else {
                         url = window.location.toString().replace(window.location.origin, '');
-                        if (this.options.openingUrl === undefined) this.options.openingUrl = url;
+                        if (this.options.initialUrl === undefined) this.options.initialUrl = url;
                     }
                     // set base url on the stack
                     if (!this.$container.attr(PageStack.ATTR_URL)) {
@@ -177,8 +185,8 @@ var PageStack = (function(global, $) {
                         url : url.match(urlPartsRegex)[1]
                     });});
 
-                    this._finishLoadedUrlOpening(pages, {
-                        url : this.options.openingUrl,
+                    this._openLoadedPages(pages, {
+                        url : this.options.initialUrl,
                         animation : false,
                         firstOpening : true
                     });
@@ -200,8 +208,8 @@ var PageStack = (function(global, $) {
                 var urlParts = (options.url || '').match(urlPartsRegex);
                 // remember the page's URL, or use stack's url
                 page.attr(PageStack.ATTR_URL, urlParts[1] || this.getBaseUrl());
-                // set page's id if it's missing
-                if (urlParts[2] && !page.attr('id')) page.attr('id', urlParts[2]);
+                // set page's id if it's missing and it's dynamically generated page
+                // if (urlParts[2] && !page.attr('id')) page.attr('id', urlParts[2]);
             }
             page.attr(PageStack.ATTR_PAGE, this.options.id);
             this._triggerPageEvent(page, 'ready', options);
@@ -298,7 +306,7 @@ var PageStack = (function(global, $) {
 
             selector = '[href="' + encodeURI(url) + '"]';
             // relative urls too
-            if (urlParts[2]) selector += ',[href="' + encodeURI(urlParts[2]) + '"]';
+            if (urlParts[2]) selector += ',[href="#' + encodeURI(urlParts[2]) + '"]';
 
             result = this.getNavLinks().filter(selector)
                 .not(this.options.linkNextSelector)
@@ -363,9 +371,12 @@ var PageStack = (function(global, $) {
         loadPageUrl : function(url, options) {
             if (!options) options = {};
             var page = options.reload ? null : this.getPage(url),
-                deferred;
+                deferred, 
+                urlParts = url.match(urlPartsRegex);
 
             options.url = url;
+            options.urlPath = urlParts[1];
+            options.urlHash = urlParts[2];
             if (page && page.length) {
                 return page;
             } else {
@@ -378,13 +389,21 @@ var PageStack = (function(global, $) {
         },
 
         /** Resolves URL into Deferred object. Done callback should provide the page content as the first argument 
-        @return Deffered object or FALSE if url is not supported
+        @return FALSE if URL is not supported
+                NULL for default handling
+                STRING with content
+                jQuery with content
+                Deferred object 
         */
         resolveUrl : function(url, options) {
+            if (this.options.contentProvider) {
+                var result = this.options.contentProvider.call(this, url, options);
+                if (result !== null && result !== undefined) return result;
+            }
             // remove hash from url
             url = url.replace(/#.+/, '');
             if (!url) return false;
-            return jQuery.ajax({
+            return $.ajax({
                 url : url,
                 type : 'get',
                 dataType : 'html'
@@ -399,7 +418,7 @@ var PageStack = (function(global, $) {
             var oldOnSuccess = options.onSuccess;
             options.onSuccess = function(page) {
                 if (oldOnSuccess) oldOnSuccess(page);
-                self._finishLoadedUrlOpening(page, options);
+                self._openLoadedPages(page, options);
             };
             var page = this.loadPageUrl(url, options);
             if (page && page.length) {
@@ -426,7 +445,16 @@ var PageStack = (function(global, $) {
         createPageFromDeferred: function(deferred, options) {
             if (!options) options = {};
             if (options.showLoadingPage === undefined) options.showLoadingPage = this.options.showLoadingPage;
-            var page, self = this;
+            var page, self = this, content;
+
+            if (typeof deferred === 'function') deferred = deferred.call(this, options);
+            // ductype Deferred
+            if (!deferred.state || !deferred.fail || !deferred.done) {
+                // this seems to be content!
+                content = deferred;
+                deferred = $.Deferred();
+                deferred.resolve(content);
+            }
 
             // show or not a loading page
             if (deferred.state() === 'pending') {
@@ -472,6 +500,8 @@ var PageStack = (function(global, $) {
         createPage : function(content, page, options) {
             if (!options) options = {};
 
+            var urlParts = (options.url || '').match(urlPartsRegex);
+
             content = $(content);
 
             if (content.length === 1 && content.parent().is(this.getPagesContainer())) {
@@ -487,6 +517,8 @@ var PageStack = (function(global, $) {
                             .addClass(this.options.pageClass)
                             ;
                     page.append(content);
+                    // set id for dynamic pages
+                    if (urlParts[2] && !page.attr('id')) page.attr('id', urlParts[2]);
                 }
                 this.getPagesContainer().append(page);
             } else {
@@ -504,6 +536,8 @@ var PageStack = (function(global, $) {
                     while (contentNode.firstChild) page.append(contentNode.firstChild);
                 } else {
                     page.append(content);
+                    // set id for dynamic pages
+                    if (urlParts[2] && !page.attr('id')) page.attr('id', urlParts[2]);
                 }
                 // animate...
                 this._animatePage(page, 'loaded', options);
@@ -638,12 +672,11 @@ var PageStack = (function(global, $) {
         /* Finishes opening procedure on freshly loaded pages.
         Called only after page open or deferred load.
         */
-        _finishLoadedUrlOpening : function(pages, options) {
-            if (!pages || !pages.length) return;
-
+        _openLoadedPages : function(pages, options) {
             var self = this,
                 urlParts = (options.url || '').match(urlPartsRegex),
                 page = null;
+            pages = $(pages);
 
             // got hash?
             if (urlParts[2]) {
@@ -652,16 +685,19 @@ var PageStack = (function(global, $) {
                 // try dynamic page
                 if (!page.length) {
                     options.showLoadingPage = true;
-                    if (this.openUrl('#' + urlParts[2], options) === false) {
+                    if (this.openUrl('#' + urlParts[2], options) !== false) {
+                        return; // opened dynamically...
+                    } else {
                         // mark child pagestacks with the url to open... maybe they will be able to handle this...
                         pages.find('[' + PageStack.ATTR_CONTAINER + ']').each(function() {
-                            PageStack.getPageStack(this).options.openingUrl = urlParts[2];
+                            PageStack.getPageStack(this).options.initialUrl = '#' + urlParts[2];
                         });
-                    } else {
-                        return; // opened dynamically...
                     }
                 }
             } 
+
+            if (!pages.length) return; // from now on we need them badly!
+
             // open marked as active, or the first one...
             if (!page || !page.length) {
                 page = pages.filter(this.options.pageActiveClass);
@@ -685,7 +721,7 @@ var PageStack = (function(global, $) {
         _resolveSelector : function(spec, context, alwaysReturn) {
             if (!spec) return alwaysReturn ? $() : null;
             if (spec === true) return $(context);
-            if (spec instanceof jQuery) return spec;
+            if (spec instanceof $) return spec;
             if (typeof(spec) === 'function') return spec.call(this, context);
             return $(spec, context);
         },
@@ -775,7 +811,7 @@ var PageStack = (function(global, $) {
             } else if ($link.is(this.options.linkNextSelector)) {
                 if (this.findPageNavSybling(this.getActivePage(), true).click().length > 0) return false;
             } else if ($link.is(this.options.linkPrevSelector)) {
-                var click = jQuery.Event("click");
+                var click = $.Event("click");
                 options.reverse = true;
                 click.pagestackOptions = options;
                 if (this.findPageNavSybling(this.getActivePage(), false).trigger(click).length > 0) return false;

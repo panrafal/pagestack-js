@@ -41,6 +41,10 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
                     , <a href="#bar">#bar </a>
                 </li>
                 <li><a href="/test/slides-start.html">[II Slides] Start </a></li>
+                <li><a href="/test/dynamic-1.html">[II Dynamic] Start </a>,
+                    <a href="/test/dynamic-1.html#Foo">/#Foo </a>,
+                    <a href="/test/dynamic-1.html#Bar">/#Bar </a>,
+                </li>
             </ul>
         </div>
         <div class="ps-pages">
