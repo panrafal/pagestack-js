@@ -25,6 +25,8 @@ var PageStack = (function(global, $) {
     PageStack.ATTR_PAGEEVENT = 'data-ps-on';
     PageStack.uniqueId = 1;
 
+    var urlPartsRegex = /^(.*?)(?:#(.*))?$/;
+
     PageStack.animations = {
     };
 
@@ -105,7 +107,7 @@ var PageStack = (function(global, $) {
 
         /** Initialize PageStack */
         _initialize : function() {
-            var self = this;
+            var self = this, url;
             if (!this.options.pageSelector) this.options.pageSelector = '.' + this.options.pageClass;
             if (this.options.navSelector === true) this.options.navSelector = this.options.linkSelector;
             this.$container = this._resolveSelector(this.options.container)
@@ -122,21 +124,35 @@ var PageStack = (function(global, $) {
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
                 .first();
 
-            // initialize existing pages 
-            var pages = self.getPages();
-            pages.each(function() {self._initializePage($(this), {
-                url : window.location.toString().replace(window.location.origin, '')
-            });});
+            setTimeout($.proxy(function () {
 
-            // fake-open existing active/last one
-            var active = this.getActivePage(true);
-            if (active.length) {
-                $(function() {
-                    self._onPageOpen(active, {});
-                    self._onPageOpened(active, {});
-                });
-            }
+                // guess the stack's url by searching for parent stacks
+                var parentStack = PageStack.getPageStack(this.$container.parent());
+                if (parentStack) {
+                    url = parentStack.getPageUrl( parentStack.getPages().has(this.$container) ) || parentStack.getBaseUrl();
+                } else {
+                    url = window.location.toString().replace(window.location.origin, '');
+                }
+                // set base url on the stack
+                if (!this.$container.attr(PageStack.ATTR_URL)) {
+                    this.$container.attr(PageStack.ATTR_URL, url.match(urlPartsRegex)[1]);
+                }
 
+                // initialize existing pages 
+                var pages = self.getPages();
+                pages.each(function() {self._initializePage($(this), {
+                    url : url
+                });});
+
+                // fake-open existing active/last one
+                var active = this.getActivePage(true);
+                if (active.length) {
+                    $(function() {
+                        self._onPageOpen(active, {});
+                        self._onPageOpened(active, {});
+                    });
+                }
+            }, this), 0);
         },
 
         /** Initialize this pagestack as the global one - handling address changes and unhandled urls... */
@@ -145,8 +161,12 @@ var PageStack = (function(global, $) {
         },
 
         _initializePage : function(page, options) {
-            if (options.url && !page.attr(PageStack.ATTR_URL) && !page.attr('id')) {
-                page.attr(PageStack.ATTR_URL, options.url);
+            if (!page.attr(PageStack.ATTR_URL)) {
+                var urlParts = (options.url || '').match(urlPartsRegex);
+                // remember the page's URL, or use stack's url
+                page.attr(PageStack.ATTR_URL, urlParts[1] || this.getBaseUrl());
+                // set page's id if it's missing
+                if (urlParts[2] && !page.attr('id')) page.attr('id', urlParts[2]);
             }
             page.attr(PageStack.ATTR_PAGE, this.options.id);
             this._triggerPageEvent(page, 'ready', options);
@@ -204,16 +224,23 @@ var PageStack = (function(global, $) {
             @return jQuery
         */
         getPage : function(url) {
-            var selector = '[' + PageStack.ATTR_URL + '="' + encodeURI(url) + '"]';
-            if (url[0] === '#') selector += ', #' + url.substr(1);
+            var parts = url.match(urlPartsRegex), 
+                selector = '';
+            if (parts[1]) selector = '[' + PageStack.ATTR_URL + '="' + encodeURI(parts[1]) + '"]';
+            if (parts[2]) selector = '[id="' + encodeURI(parts[2]) + '"]';
             return this.getPages().filter(selector).first();
         },
 
         getPageUrl : function(page, absolute) {
-            var url = page.attr(PageStack.ATTR_URL);
+            if (absolute === undefined) absolute = true;
+            var url = page.attr(PageStack.ATTR_URL),
+                id = page.attr('id');
+            if (!absolute && id && url == this.getBaseUrl()) url = '';
+            if (id) url += '#' + id;
             return url;
         },
 
+        /** Return URL of this pagestack */
         getBaseUrl : function() {
             return this.getContainer().attr(PageStack.ATTR_URL);
         },
@@ -229,12 +256,14 @@ var PageStack = (function(global, $) {
             if (!this.options.navSelector) return $();
 
             var url = this.getPageUrl(page, true), 
-                selector, hash, result;
+                selector, hash, result,
+                urlParts = url.match(urlPartsRegex);
 
             if (!url) return $();
+
             selector = '[href="' + encodeURI(url) + '"]';
             // relative urls too
-            if ((hash = url.indexOf('#')) > url.length - 2) selector += ',[href="' + encodeURI(url.substr(hash)) + '"]';
+            if (urlParts[2]) selector += ',[href="' + encodeURI(urlParts[2]) + '"]';
 
             result = this.getNavLinks().filter(selector)
                 .not(this.options.linkNextSelector)
@@ -313,6 +342,8 @@ var PageStack = (function(global, $) {
 
         /** Resolves URL into Deferred object. Done callback should provide the page content as the first argument */
         resolveUrl : function(url, options) {
+            // remove hash from url
+            url = url.replace(/#.+/, '');
             return jQuery.ajax({
                 url : url,
                 type : 'get',
@@ -357,7 +388,7 @@ var PageStack = (function(global, $) {
 
             // show or not a loading page
             if (options.showLoadingPage) {
-                page = this.createPage()
+                page = this.createPage(null, null, options)
                     .addClass(this.options.loadingClass)
                     .addClass(this.options.tempClass)
                     ;
@@ -493,7 +524,7 @@ var PageStack = (function(global, $) {
         reloadPage : function(page) {
             if (!page) page = this.getActivePage();
             if (!page.length) return;
-            var url = this.getPageUrl(page);
+            var url = this.getPageUrl(page, true);
             if (!url) return;
             this.openUrl(url, {reload:true});
         },
@@ -633,13 +664,8 @@ var PageStack = (function(global, $) {
             // ignore local urls we don't have
             if (url[0] === '#' && !this.getPage(url)) return;
 
-            try {
+            this.openUrl(url, options);
 
-                this.openUrl(url, options);
-
-            } catch (err) {
-                if (window.console) console.log(err);
-            }
             return false;
 
         },
