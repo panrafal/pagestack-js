@@ -16,10 +16,14 @@
                 </script>                
             </div>
         </div>
+        <a href="/test/slides-start.html">start</a>
         <?php 
-        for ($i = 1; $i < 10; ++$i) echo '<a href="/test/slides-',$i,'.html">',$i,'</a>';
+        for ($i = 1; $i < 10; ++$i) echo '<a href="/test/slides-',$i,'.html">',$i,'</a> ';
         ?>
+        <a href="/test/slides-prev_fallback.html" class="ps-prev">prev</a>
+        <a href="#" onclick="console.log('next fallback')" class="ps-next">next</a>
     </div>
+
 
     <script>
         new PageStack({

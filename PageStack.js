@@ -39,6 +39,7 @@ var PageStack = (function(global, $) {
             id              : null,
             container       : 'body',
             pagesContainer  : '.ps-pages',
+            linksContainer  : true,
             /** Container with links used for navigation. 
                 They will be marked with linkActiveClass and used for prev/next navigation 
                 Selector, function(context), jQuery(), TRUE to use container, or FALSE to disable
@@ -56,14 +57,18 @@ var PageStack = (function(global, $) {
 
             pageClass       : 'ps-page',
             pageActiveClass : 'ps-active',
-            linkActiveClass : 'ps-active',
+            linkActiveClass : 'active',
             removingClass   : 'ps-removing',
             loadingClass    : 'ps-loading',
             tempClass       : 'ps-temp',
-            linkCloseClass  : 'ps-close',
-            linkReplaceClass: 'ps-replace',
-            linkReverseClass: 'ps-reverse',
             animateClass    : 'ps-animate',
+
+            linkCloseSelector : '.ps-close',
+            linkReplaceSelector : '.ps-replace',
+            linkReverseSelector : '.ps-reverse',
+            linkNextSelector : '.ps-next',
+            linkPrevSelector : '.ps-prev',
+            linkExternalSelector : '.ps-external',
 
             animation       : {
                 all : {
@@ -104,12 +109,15 @@ var PageStack = (function(global, $) {
             if (this.options.navSelector === true) this.options.navSelector = this.options.linkSelector;
             this.$container = this._resolveSelector(this.options.container)
                 .first()
-                .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
                 .data('pagestack', this)
                 ;
             if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
                 
+            this.getLinksContainer()
+                .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
+                ;
+
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
                 .first();
 
@@ -148,6 +156,9 @@ var PageStack = (function(global, $) {
         },
         getPagesContainer : function() {
             return this.$pagesContainer;
+        },
+        getLinksContainer : function() {
+            return this._resolveSelector(this.options.linksContainer, this.$container, true);
         },
         getNavContainer : function() {
             return this._resolveSelector(this.options.navContainer, this.$container, true);
@@ -222,13 +233,27 @@ var PageStack = (function(global, $) {
             if (!url) return $();
             selector = '[href="' + encodeURI(url) + '"]';
             // relative urls too
-            if ((hash = url.indexOf('#')) > 0) selector += ',[href="' + encodeURI(url.substr(hash)) + '"]';
+            if ((hash = url.indexOf('#')) > url.length - 2) selector += ',[href="' + encodeURI(url.substr(hash)) + '"]';
 
-            result = this.getNavLinks().filter(selector);
+            result = this.getNavLinks().filter(selector)
+                .not(this.options.linkNextSelector)
+                .not(this.options.linkPrevSelector)
+                .not(this.options.linkCloseSelector)
+                ;
 
             // include the nav parent
-            if (includeParent && this.options.navParentSelector) result.parents(this.options.navParentSelector).addBack();
+            if (includeParent && this.options.navParentSelector) result = result.parents(this.options.navParentSelector).addBack();
             return result;
+        },
+
+        findPageNavSybling : function(page, next) {
+            var nav = this.findPageNavLink(page, false)
+                    .eq(0);
+            return nav[next ? 'next' : 'prev'](this.options.navSelector)
+                .not(this.options.linkNextSelector)
+                .not(this.options.linkPrevSelector)
+                .not(this.options.linkCloseSelector)
+                ;
         },
 
         /** Opens specified page, or hides current one if page is null/empty */
@@ -554,25 +579,37 @@ var PageStack = (function(global, $) {
 
         _onLinkClick : function(e) {
             var $link = $(e.target), 
-                url = $link.attr('href')
+                url = $link.attr('href'),
+                options = e.pagestackOptions || {},
+                nav
                 ;
+
+            if (options.replace === undefined) options.replace = $link.is(this.options.linkReplaceSelector);
+            if (options.reverse === undefined) options.reverse = $link.is(this.options.linkReverseSelector);
+
+            // check special cases
+            if ($link.is(this.options.linkCloseSelector) && this.getPages().length > 1) {
+                this.closePage();
+                return false;
+            } else if ($link.is(this.options.linkNextSelector)) {
+                if (this.findPageNavSybling(this.getActivePage(), true).click().length > 0) return false;
+            } else if ($link.is(this.options.linkPrevSelector)) {
+                var click = jQuery.Event("click");
+                options.reverse = true;
+                click.pagestackOptions = options;
+                if (this.findPageNavSybling(this.getActivePage(), false).trigger(click).length > 0) return false;
+            }
 
             // ignore some links...
             if (!url || url === '' || url.match(/^[\w]+:/)) return;
-            if ($link.attr('onclick') || url === '#') return;
+            if ($link.attr('onclick') || $link.attr('target') || url === '#') return;
+            if ($link.is(this.options.linkExternalSelector)) return;
             // ignore local urls we don't have
             if (url[0] === '#' && !this.getPage(url)) return;
 
             try {
-                if ($link.hasClass(this.options.linkCloseClass) && this.getPages().length > 1) {
-                    this.closePage();
-                    return false;
-                }
 
-                this.openUrl(url, {
-                        replace : $link.hasClass(this.options.linkReplaceClass), 
-                        reverse : $link.hasClass(this.options.linkReverseClass)
-                    });
+                this.openUrl(url, options);
 
             } catch (err) {
                 if (window.console) console.log(err);
