@@ -39,15 +39,29 @@ var PageStack = (function(global, $) {
 
         /** Default options */
         options : {
+            /** ID of this pagestack. ID attribute of the container will be used if null */
             id              : null,
+            /** Pagestack container. 
+                A selector, function(context), or jQuery()
+
+                You should NOT use id (#ID) - as in some situations the same pagestack may exist twice!
+            */
             container       : 'body',
+            /** Container to put the pages in 
+            A selector, function(context), jQuery() or TRUE to use container
+            */
             pagesContainer  : '.ps-pages',
+            /** Container to catch the links in
+            A selector, function(context), jQuery() or TRUE to use container
+            */
             linksContainer  : true,
             /** Container with links used for navigation. 
                 They will be marked with linkActiveClass and used for prev/next navigation 
                 Selector, function(context), jQuery(), TRUE to use container, or FALSE to disable
                 */ 
             navContainer    : true,
+
+            openingUrl      : undefined,
 
             /** Selector for pages. Use null to set it to .pageClass */
             pageSelector    : null,
@@ -58,13 +72,24 @@ var PageStack = (function(global, $) {
             /** If you want the nav-link parent to also receive linkActiveClass - set it's selector */
             navParentSelector : null,
 
+            /** CSS class for pages */
             pageClass       : 'ps-page',
             pageActiveClass : 'ps-active',
             linkActiveClass : 'active',
-            removingClass   : 'ps-removing',
+            destroyingClass : 'ps-destroying',
             loadingClass    : 'ps-loading',
-            tempClass       : 'ps-temp',
             animateClass    : 'ps-animate',
+            /** Pages with this class will be always destroyed after closing */
+            temporaryClass  : 'ps-temporary',
+            /** Pages with this class will be always left after closing */
+            permanentClass  : 'ps-permanent',
+
+            /** Maximum number of pages to keep in memory. Pages with `permanentClass` class will
+            always be kept and excluded from the count. Pages with `temporaryClass` class
+            will always be removed.
+            Use 0 not to keep any pages, or -1 to keep all of them.
+             */
+            pagesLimit      : 0,
 
             linkCloseSelector : '.ps-close',
             linkReplaceSelector : '.ps-replace',
@@ -98,6 +123,7 @@ var PageStack = (function(global, $) {
             },
 
             pageTemplate    : '<div></div>',
+
             /** TRUE - placeholder page will be show, replaced inplace with loaded content
                 FALSE - current page will be closed. Container will have ps-loading class set
                 NULL - nothing will happen. Container will have ps-loading class set
@@ -111,9 +137,11 @@ var PageStack = (function(global, $) {
             if (!this.options.pageSelector) this.options.pageSelector = '.' + this.options.pageClass;
             if (this.options.navSelector === true) this.options.navSelector = this.options.linkSelector;
             this.$container = this._resolveSelector(this.options.container)
+                .not('[' + PageStack.ATTR_CONTAINER + ']')
                 .first()
                 .data('pagestack', this)
                 ;
+            if (!this.$container.length) throw new Error('Pagestack container is missing or already occupied!');
             if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
                 
@@ -124,35 +152,42 @@ var PageStack = (function(global, $) {
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
                 .first();
 
-            setTimeout($.proxy(function () {
+            var initializeLater = $.proxy(function () {
 
-                // guess the stack's url by searching for parent stacks
-                var parentStack = PageStack.getPageStack(this.$container.parent());
-                if (parentStack) {
-                    url = parentStack.getPageUrl( parentStack.getPages().has(this.$container) ) || parentStack.getBaseUrl();
-                } else {
-                    url = window.location.toString().replace(window.location.origin, '');
-                }
-                // set base url on the stack
-                if (!this.$container.attr(PageStack.ATTR_URL)) {
-                    this.$container.attr(PageStack.ATTR_URL, url.match(urlPartsRegex)[1]);
-                }
+                    // guess the stack's url by searching for parent stacks
+                    var parentStack = PageStack.getPageStack(this.$container.parent());
+                    if (parentStack) {
+                        if (!parentStack.initialized) {
+                            setTimeout(initializeLater, 0);
+                            return;
+                        }
+                        url = parentStack.getPageUrl( parentStack.getPages().has(this.$container) ) || parentStack.getBaseUrl();
+                    } else {
+                        url = window.location.toString().replace(window.location.origin, '');
+                        if (this.options.openingUrl === undefined) this.options.openingUrl = url;
+                    }
+                    // set base url on the stack
+                    if (!this.$container.attr(PageStack.ATTR_URL)) {
+                        this.$container.attr(PageStack.ATTR_URL, url.match(urlPartsRegex)[1]);
+                    }
 
-                // initialize existing pages 
-                var pages = self.getPages();
-                pages.each(function() {self._initializePage($(this), {
-                    url : url
-                });});
+                    // initialize existing pages 
+                    var pages = self.getPages();
+                    pages.each(function() {self._initializePage($(this), {
+                        url : url.match(urlPartsRegex)[1]
+                    });});
 
-                // fake-open existing active/last one
-                var active = this.getActivePage(true);
-                if (active.length) {
-                    $(function() {
-                        self._onPageOpen(active, {});
-                        self._onPageOpened(active, {});
+                    this._finishLoadedUrlOpening(pages, {
+                        url : this.options.openingUrl,
+                        animation : false,
+                        firstOpening : true
                     });
-                }
-            }, this), 0);
+
+                    this.initialized = true;
+
+                }, this)
+
+            setTimeout(initializeLater, 0);
         },
 
         /** Initialize this pagestack as the global one - handling address changes and unhandled urls... */
@@ -208,7 +243,7 @@ var PageStack = (function(global, $) {
         */
         getLastPage : function(selector) {
             return this.getPages()
-                .filter(':not(.' + this.options.removingClass + ')')
+                .filter(':not(.' + this.options.destroyingClass + ')')
                 .filter(selector ? selector : '*')
                 .last();
         },
@@ -286,7 +321,7 @@ var PageStack = (function(global, $) {
                 ;
         },
 
-        /** Opens specified page, or hides current one if page is null/empty */
+        /** Opens specified page, or just closes current one if `page` is null/empty */
         openPage : function(page, options) {
             var current = this.getActivePage(),
                 self = this;
@@ -303,7 +338,7 @@ var PageStack = (function(global, $) {
             if (current.length) {
                 // when replacing, mark the current as temporary
                 if (options.replace) {
-                    current.addClass(this.options.tempClass);
+                    current.addClass(this.options.temporaryClass);
                 }
                 this._onPageClose(current, options);
             }
@@ -322,7 +357,8 @@ var PageStack = (function(global, $) {
         },
 
         /** Tries to find existing page with that URL, or resolve and load one.
-            If page is needed immediately, pass `showLoadingPage:true` in options
+            If a page is needed immediately, pass `showLoadingPage:true` in options
+            @return Existing page, loading page or NULL when waiting. FALSE if URL is not supported.
           */
         loadPageUrl : function(url, options) {
             if (!options) options = {};
@@ -334,16 +370,20 @@ var PageStack = (function(global, $) {
                 return page;
             } else {
                 deferred = this.resolveUrl(url, options);
+                if (deferred === false) return false;
                 if (!deferred) throw new Error('URL ' + url + ' is not handled!');
                 return this.createPageFromDeferred(deferred, options);
             }
 
         },
 
-        /** Resolves URL into Deferred object. Done callback should provide the page content as the first argument */
+        /** Resolves URL into Deferred object. Done callback should provide the page content as the first argument 
+        @return Deffered object or FALSE if url is not supported
+        */
         resolveUrl : function(url, options) {
             // remove hash from url
             url = url.replace(/#.+/, '');
+            if (!url) return false;
             return jQuery.ajax({
                 url : url,
                 type : 'get',
@@ -351,18 +391,20 @@ var PageStack = (function(global, $) {
             });
         },
 
+        /** Opens specified URL.
+            @return Existing page, loading page or NULL when waiting. FALSE if URL is not supported. */
         openUrl : function(url, options) {
             var self = this;
             if (!options) options = {};
             var oldOnSuccess = options.onSuccess;
             options.onSuccess = function(page) {
                 if (oldOnSuccess) oldOnSuccess(page);
-                self.openPage(page, options);
+                self._finishLoadedUrlOpening(page, options);
             };
             var page = this.loadPageUrl(url, options);
             if (page && page.length) {
-                // disable the callback
-                options.onSuccess = oldOnSuccess;
+                // disable the callback if it's not a loading page
+                if (!page.hasClass(this.options.loadingClass)) options.onSuccess = oldOnSuccess;
                 self.openPage(page, options);
             }
             return page;
@@ -387,15 +429,18 @@ var PageStack = (function(global, $) {
             var page, self = this;
 
             // show or not a loading page
-            if (options.showLoadingPage) {
-                page = this.createPage(null, null, options)
-                    .addClass(this.options.loadingClass)
-                    .addClass(this.options.tempClass)
-                    ;
-                this.openPage(page, options);
-            } else if (options.showLoadingPage !== null) {
-                this.openPage(null, options); 
-            } 
+            if (deferred.state() === 'pending') {
+                self.showLoader(true);
+                if (options.showLoadingPage) {
+                    page = this.createPage(null, null, options)
+                        .addClass(this.options.loadingClass)
+                        .addClass(this.options.temporaryClass)
+                        ;
+                    this.openPage(page, options);
+                } else if (options.showLoadingPage !== null) {
+                    this.openPage(null, options); 
+                } 
+            }
 
             this._loading = deferred;
 
@@ -429,6 +474,11 @@ var PageStack = (function(global, $) {
 
             content = $(content);
 
+            if (content.length === 1 && content.parent().is(this.getPagesContainer())) {
+                // this is already a on-stack page!
+                return content;
+            }
+
             if (!page || page.length === 0) {
                 if (content && content.hasClass(this.options.pageClass)) {
                     page = content;
@@ -451,7 +501,7 @@ var PageStack = (function(global, $) {
                         content.attr(name, '');
                     }
                     var contentNode = content.get(0), pageNode = page.get(0);
-                    while (contentNode.firstChild) pageNode.appendChild(contentNode.firstChild);
+                    while (contentNode.firstChild) page.append(contentNode.firstChild);
                 } else {
                     page.append(content);
                 }
@@ -459,7 +509,7 @@ var PageStack = (function(global, $) {
                 this._animatePage(page, 'loaded', options);
             }
 
-            if (options.temp) page.addClass(this.options.tempClass);
+            if (options.temp) page.addClass(this.options.temporaryClass);
 
             // initialize, even again...
             this._initializePage(page, options);
@@ -503,12 +553,24 @@ var PageStack = (function(global, $) {
             if (page && page.length) {
                 // remove temp & loading from the base page...
                 page.removeClass(this.options.loadingClass)
-                    .removeClass(this.options.tempClass);
+                    .removeClass(this.options.temporaryClass);
             }
 
-            $(data).each(function() {
-                result = result.add(self.createPage($(this), page, options));
-                page = null; // dont reuse it anymore
+            data = $(data);
+
+            if (!data.length) return result;
+
+            // create the page with ordered id, or first...
+            var urlParts = (options.url || '').match(urlPartsRegex),
+                first;
+            if (urlParts[2]) first = data.filter('[id="' + encodeURI(urlParts[2]) + '"]');
+            if (!first || !first.length) first = data.first();
+
+            result = result.add(self.createPage(first, page, options));
+
+            // create the rest
+            data.not(first).each(function() {
+                result = result.add(self.createPage($(this), null, options));
             });
 
             return result;
@@ -516,7 +578,7 @@ var PageStack = (function(global, $) {
 
         /** Close current page */
         closePage : function() {
-            this.getActivePage().addClass(this.options.tempClass);
+            this.getActivePage().addClass(this.options.temporaryClass);
             this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'), {reverse : true});
         },
 
@@ -553,22 +615,71 @@ var PageStack = (function(global, $) {
             }
         },
 
-        cleanupOldPages : function() {
-            // this.getPages().filter('.' + this.options.tempClass)
-            //     .not('.' + this.options.pageActiveClass)
-            //     .detach();
-            
-            // TODO
-/*            
+        _cleanupOldPages : function() {
             // clean all old pages
-            if (this.pagesLimit) {
-                var pages = $(this.$page + '[data-url]', this.pagesDom).not('.active,.persist,.removing');
-                if (pages.length > this.pagesLimit) {
-                    pages = pages.slice(0, pages.length - this.pagesLimit);
-                    pages.detach();
-                    console.log('cleanup ' + pages.length);
+            if (this.options.pagesLimit >= 0) {
+                var pages = this.getPages().not(
+                        '.' + this.options.pageActiveClass + 
+                        ', .' + this.options.permanentClass + 
+                        ', .' + this.options.destroyingClass + 
+                        ', .' + this.options.animateClass),
+                    self = this;
+                if (pages.length > this.options.pagesLimit) {
+                    pages = pages.slice(0, pages.length - this.options.pagesLimit);
+                    pages.each(function() {
+                        var $this = $(this);
+                        self._triggerPageEvent($this, 'destroy', {});
+                        $this.remove();
+                    });
                 }
-            }*/
+            }
+        },
+
+        /* Finishes opening procedure on freshly loaded pages.
+        Called only after page open or deferred load.
+        */
+        _finishLoadedUrlOpening : function(pages, options) {
+            if (!pages || !pages.length) return;
+
+            var self = this,
+                urlParts = (options.url || '').match(urlPartsRegex),
+                page = null;
+
+            // got hash?
+            if (urlParts[2]) {
+                // search for static page
+                page = pages.filter('[id="' + encodeURI(urlParts[2]) + '"]');
+                // try dynamic page
+                if (!page.length) {
+                    options.showLoadingPage = true;
+                    if (this.openUrl('#' + urlParts[2], options) === false) {
+                        // mark child pagestacks with the url to open... maybe they will be able to handle this...
+                        pages.find('[' + PageStack.ATTR_CONTAINER + ']').each(function() {
+                            PageStack.getPageStack(this).options.openingUrl = urlParts[2];
+                        });
+                    } else {
+                        return; // opened dynamically...
+                    }
+                }
+            } 
+            // open marked as active, or the first one...
+            if (!page || !page.length) {
+                page = pages.filter(this.options.pageActiveClass);
+                if (page.length === 0) page = pages.first();
+            }
+
+            // on first opening, nothing should be active...
+            if (options.firstOpening) {
+                pages.removeClass(this.options.pageActiveClass);
+                // run events when the page is fully loaded
+                $(function() {
+                    self._onPageOpen(page, {});
+                    self._onPageOpened(page, {});
+                });
+            } else if (!page.hasClass(this.options.pageActiveClass)) {
+                // page could be already activated by loading page
+                this.openPage(page, options);
+            }
         },
 
         _resolveSelector : function(spec, context, alwaysReturn) {
@@ -590,8 +701,17 @@ var PageStack = (function(global, $) {
          * @param forward true|false
          **/
         _animatePage : function(page, type, options, next) {
+            if (options.animation === false) {
+                this._onAnimationFinished(page, type, options);      
+                if (next) next();
+                return;
+            }
             var self = this,
-                animation = $.extend({}, this.options.animation.all, this.options.animation[type] || {}, options);
+                animation = $.extend({}, 
+                    this.options.animation.all, 
+                    this.options.animation[type] || {}, 
+                    options, 
+                    options.animation || {});
             
             if (animation.animation && typeof(animation.animation) !== 'function')
                 animation.animation = PageStack.animations[animation.animation];
@@ -623,10 +743,12 @@ var PageStack = (function(global, $) {
         },
         
         _onAnimationFinished : function(page, type, options) {
-            page.removeClass(this.options.animateClass + '-' + type)
-                .removeClass(this.options.animateClass)
-                .removeClass(this.options.animateClass + '-reverse')
-                ;
+            if (options.animation !== false) {
+                page.removeClass(this.options.animateClass + '-' + type)
+                    .removeClass(this.options.animateClass)
+                    .removeClass(this.options.animateClass + '-reverse')
+                    ;
+            }
             if (type === 'close') {
                 this._onPageClosed(page, options);
             } else if (type === 'open') {
@@ -645,9 +767,11 @@ var PageStack = (function(global, $) {
             if (options.reverse === undefined) options.reverse = $link.is(this.options.linkReverseSelector);
 
             // check special cases
-            if ($link.is(this.options.linkCloseSelector) && this.getPages().length > 1) {
-                this.closePage();
-                return false;
+            if ($link.is(this.options.linkCloseSelector)) {
+                if (this.getPages().length > 1) {
+                    this.closePage();
+                    return false;
+                } else options.reverse = true;
             } else if ($link.is(this.options.linkNextSelector)) {
                 if (this.findPageNavSybling(this.getActivePage(), true).click().length > 0) return false;
             } else if ($link.is(this.options.linkPrevSelector)) {
@@ -661,10 +785,11 @@ var PageStack = (function(global, $) {
             if (!url || url === '' || url.match(/^[\w]+:/)) return;
             if ($link.attr('onclick') || $link.attr('target') || url === '#') return;
             if ($link.is(this.options.linkExternalSelector)) return;
-            // ignore local urls we don't have
-            if (url[0] === '#' && !this.getPage(url)) return;
 
-            this.openUrl(url, options);
+            if (this.openUrl(url, options) === false) {
+                // this URL is not supported...
+                return;
+            }
 
             return false;
 
@@ -673,8 +798,8 @@ var PageStack = (function(global, $) {
         _onPageClose : function(page, options) {
             page.removeClass(this.options.pageActiveClass);
             this.findPageNavLink(page, true).removeClass(this.options.linkActiveClass);
-            if (page.hasClass(this.options.tempClass)) {
-                page.addClass(this.options.removingClass);
+            if (page.hasClass(this.options.temporaryClass)) {
+                page.addClass(this.options.destroyingClass);
             }
             this._triggerPageEvent(page, 'close', options);
         },
@@ -686,17 +811,17 @@ var PageStack = (function(global, $) {
             page.addClass(this.options.pageActiveClass);
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
-            this.cleanupOldPages();
         },
 
         _onPageClosed : function(page, options) {
             page.css('display', 'none');
             this._triggerPageEvent(page, 'closed', options);
-            if (page.hasClass(this.options.removingClass)) {
+            if (page.hasClass(this.options.destroyingClass)) {
                 this._triggerPageEvent(page, 'destroy', options);
                 page.detach();
                 page = null;
             }
+            this._cleanupOldPages();
         },
 
         _onPageOpened : function(page, options) {

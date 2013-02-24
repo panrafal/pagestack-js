@@ -1,5 +1,5 @@
 <div class="ps-page">
-    <div id="slides">
+    <div id="slides" class="ps-container">
         <div class="ps-pages">
             <div class="ps-page slide" 
                 data-ps-onready="console.log('ready!', this, page, options)"
@@ -27,7 +27,7 @@
 
     <script>
         new PageStack({
-            container: '#slides',
+            container: '.ps-container',
             showLoadingPage: true
         });
         console.log('Slides initialized');
