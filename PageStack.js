@@ -7,6 +7,7 @@
 * page-opened(e, pagestack) called on page after opening
 * page-close(e, pagestack) called on page before closing
 * page-closed(e, pagestack) called on page after closing
+* page-destroy(e, pagestack) called on page just before destroying
 
 */
 var PageStack = (function(global, $) {
@@ -291,31 +292,49 @@ var PageStack = (function(global, $) {
             }
         },
 
-        openUrl : function(url, options) {
+        /** Tries to find existing page with that URL, or resolve and load one.
+            If page is needed immediately, pass `showLoadingPage:true` in options
+          */
+        loadPageUrl : function(url, options) {
             if (!options) options = {};
             var page = options.reload ? null : this.getPage(url),
                 deferred;
 
             options.url = url;
             if (page && page.length) {
-                this.openPage(page, options);
                 return page;
             } else {
-
-                try {
-
-                    deferred = jQuery.ajax({
-                        url : url,
-                        type : 'get',
-                        dataType : 'html'
-                    });
-                    return this.openDeferred(deferred, options);
-
-                } catch (err) {
-                    if (console) console.log(err);
-                }    
-
+                deferred = this.resolveUrl(url, options);
+                if (!deferred) throw new Error('URL ' + url + ' is not handled!');
+                return this.createPageFromDeferred(deferred, options);
             }
+
+        },
+
+        /** Resolves URL into Deferred object. Done callback should provide the page content as the first argument */
+        resolveUrl : function(url, options) {
+            return jQuery.ajax({
+                url : url,
+                type : 'get',
+                dataType : 'html'
+            });
+        },
+
+        openUrl : function(url, options) {
+            var self = this;
+            if (!options) options = {};
+            var oldOnSuccess = options.onSuccess;
+            options.onSuccess = function(page) {
+                if (oldOnSuccess) oldOnSuccess(page);
+                self.openPage(page, options);
+            };
+            var page = this.loadPageUrl(url, options);
+            if (page && page.length) {
+                // disable the callback
+                options.onSuccess = oldOnSuccess;
+                self.openPage(page, options);
+            }
+            return page;
         },
 
         openContent : function(content, options) {
@@ -325,18 +344,25 @@ var PageStack = (function(global, $) {
             return page;
         },
 
-        openDeferred: function(deferred, options) {
+        /** Creates a page from a deferred object.
+            Options:
+            - showLoadingPage
+            - onSuccess - callback(page) when the loading is complete
+            @return jQuery page if showLoadingPage was TRUE
+         */
+        createPageFromDeferred: function(deferred, options) {
             if (!options) options = {};
+            if (options.showLoadingPage === undefined) options.showLoadingPage = this.options.showLoadingPage;
             var page, self = this;
 
             // show or not a loading page
-            if (this.options.showLoadingPage) {
+            if (options.showLoadingPage) {
                 page = this.createPage()
                     .addClass(this.options.loadingClass)
                     .addClass(this.options.tempClass)
                     ;
                 this.openPage(page, options);
-            } else if (this.options.showLoadingPage !== null) {
+            } else if (options.showLoadingPage !== null) {
                 this.openPage(null, options); 
             } 
 
@@ -347,7 +373,7 @@ var PageStack = (function(global, $) {
                     self._loading = null;
                     self.showLoader(false);
                     page = self.parsePages(data, page, options);
-                    self.openPage(page.eq(0));
+                    if (options.onSuccess) options.onSuccess(page);
                 }
             });
             deferred.fail(function() {
@@ -641,6 +667,7 @@ var PageStack = (function(global, $) {
             page.css('display', 'none');
             this._triggerPageEvent(page, 'closed', options);
             if (page.hasClass(this.options.removingClass)) {
+                this._triggerPageEvent(page, 'destroy', options);
                 page.detach();
                 page = null;
             }
