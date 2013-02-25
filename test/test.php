@@ -71,7 +71,7 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
                 navParentSelector : '.ps-nav>ul>li',
                 pagesLimit : -1,
                 //showLoadingPage : false,
-                animation : { all : {animation : 'fade'} }
+                animation : { all : {motion : 'fade'} }
             });
         </script>
     </body>

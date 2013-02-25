@@ -11,26 +11,25 @@ PageStack allows to create stacks on many levels, animating just the parts that 
 where it does make sense to generate stuff on the client side (think galleries), PageStack handles this also!
 
 
-# Prerequisites
+## Prerequisites
 
 **Required**:
 
-* [jQuery](http://jquery.com) It is for now only tested on version 1.9, but should work with
-the others.
+* [jQuery](http://jquery.com) developed on version 1.9, but should work with the older ones...
 
 __Optional dependencies__:
 
-* [jQuery.Address](http://www.asual.com/jquery/address/) For handling history
+* [jQuery.Address](http://www.asual.com/jquery/address/) For history handling
 * [jQuery.transit](https://github.com/panrafal/jquery.transit) For faster, accelerated animations. Because of
 the bug in transit, You'll have to use my copy, until the pull request is accepted.
 
-# Usage
+## Usage
 
 Create your pages like you always do. Statically, or with any framework. Just designate parts
 that will be controlled by pagestack either by using default css-classes, or by specifiyng your
 own in the options.
 
-Create PageStack object and pass it some options. Pagestacks should be created inline for ease of use, especially
+Create PageStack object and pass it some options. Pagestacks should be initialized inline for ease of use, especially
 the embedded ones. You can make it fully event-driven, but it's not covered here.
 
 Minimal website with an index page and a dynamic gallery:
@@ -47,12 +46,15 @@ Minimal website with an index page and a dynamic gallery:
         <script src="mypage.js"></script>
         <link rel="stylesheet" type="text/css" href="mypage.css" />
     </head>
-    <body>
-    	<h1>This is the site header. It won't move an inch!</h1>
-        <div class="ps-pages">
-            <div class="ps-page" title="Hello!">
+    <body> <!-- This will be the "container" -->
+        <h1>This is the site header. It won't move an inch!</h1>
+        <div class="ps-pages"> <!-- Pages will be loaded in here -->
+            <div class="ps-page" title="Hello!"> <!-- This is the index page -->
                 <h2>Hello!</h2>
-                <a href="/gallery.html">see my gallery!</a>
+                <!-- The page below will be loaded. 
+                     The page will be extracted with 'body .ps-page' selector.
+                     The page will be appended to ps-pages and animated.-->
+                <a href="gallery.html">see my gallery!</a> 
             </div>
         </div>
 
@@ -72,30 +74,44 @@ Minimal website with an index page and a dynamic gallery:
         <script src="mypage.js"></script>
         <link rel="stylesheet" type="text/css" href="mypage.css" />
     </head>
-    <body>
-    	<h1>This is the site header. It won't move an inch!</h1>
+    <body> 
+        <!-- Everything except the page content should be the same. 
+             If the user navigates to this url directly, and open index.html
+             from here, he should see the same page, as he would go to index.html directly.
+        -->
+        <h1>This is the site header. It won't move an inch!</h1>
         <div class="ps-pages">
-            <div class="ps-page" title="Gallery">
+            <div class="ps-page" title="Gallery"> <!-- This is the gallery page -->
                 <h2>My gallery!</h2>
-
-			    <div id="gallery" class="ps-container">
-			        <div class="ps-pages">
-			        </div>
-			        <span style="display:none">
-			        	<!-- we need them for prev/next to work, but we don't want to show them -->
-			        	<a href="#image1.jpg"></a>
-			        	<a href="#image2.jpg"></a>
-			        	<a href="#image3.jpg"></a>
-			        </span>
-			        <a href="#" class="ps-prev">prev</a>
-			        <a href="#" class="ps-next">next</a>
-			    </div>
-
-			    <script>
-			    	// we have to initialize gallery container
-			    	initMyGallery();
-			    </script>
+                <!-- Gallery is an embedded container. 
+                     Because of that, both the id AND a class are required.
+                     ID is used to locate the container when loading the page fragment.
+                     Css class is used to reference the container in PageStack options,
+                     where referencing by id should be avoided. -->
+                <div id="gallery" class="ps-container">
+                     <div class="ps-pages">
+                           <!-- the contents will go here, dynamically -->
+                    </div>
+                    <span style="display:none">
+                        <!-- These links are the reference for prev and next buttons.
+                             You could make a list of thumbnails - an active one will
+                             have a 'active' class. -->
+                        <a href="#image1.jpg"></a>
+                        <a href="#image2.jpg"></a>
+                        <a href="#image3.jpg"></a>
+                    </span>
+                    <!-- ps-prev and ps-prev are special classes. They will open
+                         previous/next navigation link -->
+                    <a href="#" class="ps-prev">prev</a>
+                    <a href="#" class="ps-next">next</a>
+                </div>
+                <!-- ps-close will close the current page and open the previous one.
+                     If there are no other pages, the href will be used instead -->
                 <a href="/test/index.html" class="ps-close">go back</a>
+                <script>
+                    // we have to initialize gallery container
+                    initMyGallery();
+                </script>
             </div>
         </div>
 
@@ -105,27 +121,32 @@ Minimal website with an index page and a dynamic gallery:
 
 ### mypage.js
 ```js
+// initialize main container
 $(function() {
+    // setup jquery.address history
     $.address.state('/');
+    // make body a PageStack container
     $('body').pagestack({
-    	// you can customize the pagestack here
+        // you can customize the pagestack here
 
-    	// use fade animation
-    	animation : { all : {animation : 'fade'} }
+        // use fade animation 
+        animation : { all : {motion : 'fade'} }
     });
 });
 
 initMyGallery() {
-	// another way to use PageStack
+    // another way to use PageStack
     new PageStack({
         container: '.ps-container',
-        history: false, // we dont need history here
+        history: false, // we don't need history here
         pagesLimit: -1, // we want to keep all generated pages for fast traversing
-        initialUrl: '#image1.jpg', // we want to start with first image
+        initialUrl: '#image1.jpg', // we want to start with the first image
+        /** content provider returns page's contents. 
+            Enclosing in <div class="ps-page"></div> is optional. */
         contentProvider: function(url, options) {
             return '<img src="' + options.urlHash + '" />';
         }
-    });	
+    }); 
 }
 ```
 
@@ -135,12 +156,15 @@ initMyGallery() {
     position:relative;
 }
 .ps-page {
+    /* There may be many pages under .ps-pages - hence the absolute positioning.
+       All inactive ones should be hidden. 
+       */
     position:absolute;
     width:100%;
     display:none;
 }
 .ps-page.ps-active, .ps-page.ps-animate {
-    display:block; /* show only active and animated */
+    display:block;
 }
 
 ```
