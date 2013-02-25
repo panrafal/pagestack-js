@@ -1,3 +1,13 @@
+/*
+ * PageStack JS
+ * 
+ * https://github.com/panrafal/pagestack-js
+ *
+ * Copyright (c)2013 Rafal Lindemann
+ * 
+ * For the full copyright and license information, please view the LICENSE
+ * file that was distributed with this source code.
+ */
 
 /**
 
@@ -51,7 +61,7 @@ var PageStack = (function(global, $) {
 
                 You should NOT use id (#ID) - as in some situations the same pagestack may exist twice!
             */
-            container       : 'body',
+            container       : '.ps-container',
             /** Container to put the pages in 
             A selector, function(context), jQuery() or TRUE to use container
             */
@@ -111,7 +121,7 @@ var PageStack = (function(global, $) {
 
             animation : {
                 all : {
-                    animation   : 'slide',
+                    motion      : 'slide',
                     delay       : 0,
                     duration    : 500,
                     easing      : undefined,
@@ -124,7 +134,7 @@ var PageStack = (function(global, $) {
                     },
                 /* Animation called after loading deferred data while using showLoadingPage:true */    
                 loaded : {
-                    animation   : 'fade',
+                    motion      : 'fade',
                     delay       : 0,
                     duration    : 200,
                     queue       : false,
@@ -778,8 +788,8 @@ var PageStack = (function(global, $) {
                     options, 
                     options.animation || {});
             
-            if (animation.animation && typeof(animation.animation) !== 'function')
-                animation.animation = PageStack.animations[animation.animation];
+            if (animation.motion && typeof(animation.motion) !== 'function')
+                animation.motion = PageStack.animations[animation.motion];
 
             page.addClass(this.options.animateClass);
             page.addClass(this.options.animateClass + '-' + type);
@@ -797,8 +807,8 @@ var PageStack = (function(global, $) {
                 }
             };
 
-            if (animation.animation) {
-                animation.animation.call(this, animation.animateChildren ? page.children() : page, type, animation, onFinished);
+            if (animation.motion) {
+                animation.motion.call(this, animation.animateChildren ? page.children() : page, type, animation, onFinished);
             } else {
                 onFinished();
             }
@@ -875,7 +885,7 @@ var PageStack = (function(global, $) {
         _onPageOpen : function(page, options) {
             var title;
             // reset whatever onPageClosed did...
-            page.css('display', '');
+            // page.css('display', '');
             page.addClass(this.options.pageActiveClass);
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
@@ -896,7 +906,7 @@ var PageStack = (function(global, $) {
         },
 
         _onPageClosed : function(page, options) {
-            page.css('display', 'none');
+            // page.css('display', 'none');
             this._triggerPageEvent(page, 'closed', options);
             if (page.hasClass(this.options.destroyingClass)) {
                 this._triggerPageEvent(page, 'destroy', options);
@@ -924,14 +934,7 @@ var PageStack = (function(global, $) {
         _onPageLoadError : function(e, message) {
             console.log('page load error!');
             // TODO
-/*            if (e.statusText == 'abort') return;
-            console.log('doLoadPage error ' + e.statusText);
-            console.log(e);
-    //                me.onPageLoaded(url, e.responseText);
-            if (!message) message = 'Niestety wystąpił błąd. Spróbuj ponownie.';
-            //Zasieg.showErrorPopup(message, 'pageload');
-            this.cancelLoad();
-*/        }
+        }
     };
 
     /** Get pagestack for this element */
@@ -1040,6 +1043,10 @@ var PageStack = (function(global, $) {
             });
     };
 
+    $.fn.pagestack = function(options) {
+        if (!options.container) options.container = this;
+        new PageStack(options);
+    };
 
     return PageStack;   
 

@@ -64,7 +64,10 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
 
         <script>
             $.address.state('/');
-            var pagestack = new PageStack({
+            // var pagestack = new PageStack(
+            $('body').pagestack(
+            {
+                container : 'body',
                 navParentSelector : '.ps-nav>ul>li',
                 pagesLimit : -1,
                 //showLoadingPage : false,
