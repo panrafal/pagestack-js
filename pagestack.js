@@ -107,6 +107,8 @@ var PageStack = (function(global, $) {
             linkPrevSelector : '.ps-prev',
             linkExternalSelector : '.ps-external',
 
+            titleAttribute  : 'title',
+
             animation : {
                 all : {
                     animation   : 'slide',
@@ -871,11 +873,15 @@ var PageStack = (function(global, $) {
 
 
         _onPageOpen : function(page, options) {
+            var title;
             // reset whatever onPageClosed did...
             page.css('display', '');
             page.addClass(this.options.pageActiveClass);
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
+            if (this.options.titleAttribute && $.address && (title = page.attr(this.options.titleAttribute))) {
+                $.address.title(title);
+            }
             // store in history stack if not a loading page or first opening
             if ((this.options.history || options.history) && 
                     options.history !== false &&
