@@ -1,7 +1,7 @@
 <div class="ps-page">
     <div id="slides" class="ps-container">
         <div class="ps-pages">
-            <div class="ps-page slide" 
+            <div class="ps-page slide" title="<?= htmlspecialchars($title) ?>"
                 data-ps-onready="console.log('ready!', this, page, options)"
                 data-ps-onopen="console.log('open!', this, page, options)"
                 data-ps-onopened="console.log('opened!', this, page, options)"

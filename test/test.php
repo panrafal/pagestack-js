@@ -53,7 +53,7 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
                 require(__DIR__ . '/test-' . basename($template) . '.php');
             } else {
                 ?>
-                <div class="ps-page">
+                <div class="ps-page" title="<?= htmlspecialchars($title) ?>">
                     <h1><?= htmlspecialchars($title) ?></h1>
                     <a href="/test/index.html" class="ps-close">close</a>
                 </div>
@@ -66,6 +66,7 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
             $.address.state('/');
             var pagestack = new PageStack({
                 navParentSelector : '.ps-nav>ul>li',
+                pagesLimit : -1,
                 //showLoadingPage : false,
                 animation : { all : {animation : 'fade'} }
             });

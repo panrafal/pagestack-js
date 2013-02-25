@@ -1,6 +1,9 @@
 
 /**
 
+PageStack is a global class. You can extend is as you want, as practically everything is accessible.
+Be aware that functions and properties prefixed with '_' are *internal* and may change without prior notice.
+
 # Events
 * page-ready(e, pagestack, pages) called on window after page load, before showing
 * page-open(e, pagestack) called on page just before opening
@@ -24,11 +27,13 @@ var PageStack = (function(global, $) {
     PageStack.ATTR_URL = 'data-ps-url';
     PageStack.ATTR_PAGEEVENT = 'data-ps-on';
     PageStack.uniqueId = 1;
-
+    
     var urlPartsRegex = /^(.*?)(?:#(.*))?$/;
 
     PageStack.animations = {
     };
+
+    PageStack._urlHistory = {};
 
     PageStack.prototype = {
 
@@ -158,6 +163,7 @@ var PageStack = (function(global, $) {
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
 
             if (this.options.history && !$.address) this.options.history = false;
+            if (this.options.history) PageStack._initializeGlobalHistory();
                 
             this.getLinksContainer()
                 .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
@@ -204,10 +210,7 @@ var PageStack = (function(global, $) {
             setTimeout(initializeLater, 0);
         },
 
-        /** Initialize this pagestack as the global one - handling address changes and unhandled urls... */
-        _initializeGlobal : function() {
 
-        },
 
         _initializePage : function(page, options) {
             if (!page.attr(PageStack.ATTR_URL)) {
@@ -275,8 +278,8 @@ var PageStack = (function(global, $) {
         getPage : function(url) {
             var parts = url.match(urlPartsRegex), 
                 selector = '';
-            if (parts[1]) selector = '[' + PageStack.ATTR_URL + '="' + encodeURI(parts[1]) + '"]';
-            if (parts[2]) selector = '[id="' + encodeURI(parts[2]) + '"]';
+            if (parts[1]) selector += '[' + PageStack.ATTR_URL + '="' + encodeURI(parts[1]) + '"]';
+            if (parts[2]) selector += '[id="' + encodeURI(parts[2]) + '"]';
             return this.getPages().filter(selector).first();
         },
 
@@ -880,7 +883,9 @@ var PageStack = (function(global, $) {
                     !page.is(this.options.loadingClass) && 
                     !page.is(this.options.nohistorySelector)
             ) {
-                $.address.value(this.getPageUrl(page, true));
+                var url = this.getPageUrl(page, true);
+                PageStack._urlHistory[url] = this.getBaseUrl();
+                $.address.value(url);
             }
         },
 
@@ -924,9 +929,78 @@ var PageStack = (function(global, $) {
     };
 
     /** Get pagestack for this element */
-    PageStack.getPageStack = function(node) {
-        return $(node).closest('[' + PageStack.ATTR_CONTAINER + ']').data('pagestack');
+    PageStack.getPageStack = function(node, returnJQuery) {
+        var found = $(node).closest('[' + PageStack.ATTR_CONTAINER + ']');
+        return returnJQuery ? found : found.data('pagestack');
     };
+
+    PageStack._initializeGlobalHistory = function() {
+        if (this._initializedGlobalHistory) return;
+        this._initializedGlobalHistory = true;
+        $.address.externalChange($.proxy(this._onExternalAddressChange, this));
+    };
+
+    PageStack._onExternalAddressChange = function(event) {
+        var url = event.value,
+            urlParts = url.match(urlPartsRegex),
+            selector = '', page, container, parentStack;
+        console.log(event);
+
+        // find page with this url
+        selector = '[' + PageStack.ATTR_PAGE + ']';
+        selector += '[' + PageStack.ATTR_URL + '="' + encodeURI(urlParts[1]) + '"]';
+        if (urlParts[2]) selector += '[id="' + encodeURI(urlParts[2]) + '"]';
+        selector += ':first';
+
+        page = $(selector);
+        container = page.length ? PageStack.getPageStack(page, true) : $();
+
+        // get container from the history
+        if (!container.length && PageStack._urlHistory[url]) {
+            container = $(
+                '[' + PageStack.ATTR_CONTAINER + ']' + 
+                '[' + PageStack.ATTR_URL + '="' + PageStack._urlHistory[url] + '"]' +
+                ':first'
+            );
+        }
+
+        // or from the page
+
+        // or at least container to open the hash
+        if (!page.length && urlParts[2]) {
+            container = $(
+                '[' + PageStack.ATTR_CONTAINER + ']' + 
+                '[' + PageStack.ATTR_URL + '="' + encodeURI(urlParts[1]) + '"]' +
+                ':first'
+            );
+        }
+
+        // if everything fails, use global (first) container
+        if (!page.length && !container.length) {    
+            container = $('[' + PageStack.ATTR_CONTAINER + ']:first');
+        }
+
+        console.log('History reopen: ' + url, page, container);
+
+        // open up all parent containers
+        parentStack = PageStack.getPageStack(container.parent());
+        while (parentStack) {
+            var parentPage = parentStack.getPages().has(container);
+            if (!parentPage.hasClass(parentStack.options.pageActiveClass)) {
+                parentStack.openPage(parentPage, {history : false, reverse : true});
+            }
+            parentStack = PageStack.getPageStack(parentStack.getContainer().parent());
+        }
+
+        // open the page
+        parentStack = PageStack.getPageStack(container);
+        if (page.length) {
+            parentStack.openPage(page, {history : false, reverse : true});
+        } else {
+            parentStack.openUrl(url, {history : false, reverse : true});
+        }
+
+    }
 
     PageStack.animations.slide = function(page, type, options, next) {
         var width = this.getContainer().innerWidth() + 60,
