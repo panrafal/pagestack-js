@@ -127,6 +127,7 @@ initMyGallery() {
         }
     });	
 }
+```
 
 ### mypage.css
 ```css
