@@ -944,9 +944,14 @@ var PageStack = (function(global, $) {
     };
 
     PageStack._initializeGlobalHistory = function() {
+        var self = this;
         if (this._initializedGlobalHistory) return;
         this._initializedGlobalHistory = true;
-        $.address.externalChange($.proxy(this._onExternalAddressChange, this));
+        $(function() {
+            setTimeout(function() {
+                $.address.externalChange($.proxy(self._onExternalAddressChange, self));
+            }, 250);
+        });
     };
 
     PageStack._onExternalAddressChange = function(event) {
