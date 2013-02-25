@@ -63,6 +63,7 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
         </div>
 
         <script>
+            $.address.state('/');
             var pagestack = new PageStack({
                 navParentSelector : '.ps-nav>ul>li',
                 //showLoadingPage : false,

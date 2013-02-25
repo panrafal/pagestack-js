@@ -72,6 +72,8 @@ var PageStack = (function(global, $) {
             /** If you want the nav-link parent to also receive linkActiveClass - set it's selector */
             navParentSelector : null,
 
+            history         : true,
+
             /** CSS class for pages */
             pageClass       : 'ps-page',
             pageActiveClass : 'ps-active',
@@ -91,14 +93,16 @@ var PageStack = (function(global, $) {
              */
             pagesLimit      : 0,
 
+            /** These pages will not be saved in history */
+            nohistorySelector : '.ps-nohistory',
             linkCloseSelector : '.ps-close',
             linkReplaceSelector : '.ps-replace',
-            linkReverseSelector : '.ps-reverse',
+            linkBackwardSelector : '.ps-backward',
             linkNextSelector : '.ps-next',
             linkPrevSelector : '.ps-prev',
             linkExternalSelector : '.ps-external',
 
-            animation       : {
+            animation : {
                 all : {
                     animation   : 'slide',
                     delay       : 0,
@@ -131,11 +135,11 @@ var PageStack = (function(global, $) {
             showLoadingPage : null,
 
             /** Callback function accepting(url, options) and returning:
-             FALSE if URL is not handled at all
-             NULL for default handling
-             STRING with content
-             jQuery with content
-             Deferred object */
+                FALSE if URL is not handled at all
+                NULL for default handling
+                STRING with content
+                jQuery with content
+                Deferred object */
             contentProvider : null
         },
 
@@ -152,6 +156,8 @@ var PageStack = (function(global, $) {
             if (!this.$container.length) throw new Error('Pagestack container is missing or already occupied!');
             if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
+
+            if (this.options.history && !$.address) this.options.history = false;
                 
             this.getLinksContainer()
                 .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
@@ -274,11 +280,22 @@ var PageStack = (function(global, $) {
             return this.getPages().filter(selector).first();
         },
 
-        getPageUrl : function(page, absolute) {
+        /** Returns page's URL */
+        getPageUrl : function(page, absolute, host) {
             if (absolute === undefined) absolute = true;
-            var url = page.attr(PageStack.ATTR_URL),
+            var url, id;
+            if (!page || typeof page === 'string') {
+                url = page || '';
+            } else {
+                url = page.attr(PageStack.ATTR_URL);
                 id = page.attr('id');
+            }
+
             if (!absolute && id && url == this.getBaseUrl()) url = '';
+            else if ((absolute || !id) && !url) url = this.getBaseUrl();
+
+            if (host) url = window.location.protocol + '//' + window.location.hostname + url;
+
             if (id) url += '#' + id;
             return url;
         },
@@ -329,7 +346,15 @@ var PageStack = (function(global, $) {
                 ;
         },
 
-        /** Opens specified page, or just closes current one if `page` is null/empty */
+        /** Opens specified page, or just closes current one if `page` is null/empty 
+
+        Options:
+            - history : true/false
+            - animation : animation options or false to disable it altogether
+            - backward : play motion backwards - for 'show' from right to left, but not from visible to hidden
+            - replace : replace current page with this one
+            - temporary : make the opened page temporary
+        */
         openPage : function(page, options) {
             var current = this.getActivePage(),
                 self = this;
@@ -345,14 +370,13 @@ var PageStack = (function(global, $) {
             // close current
             if (current.length) {
                 // when replacing, mark the current as temporary
-                if (options.replace) {
-                    current.addClass(this.options.temporaryClass);
-                }
+                if (options.replace) current.addClass(this.options.temporaryClass);
                 this._onPageClose(current, options);
             }
             // open new
             if (page && page.length) {
                 this._onPageOpen(page, options);
+                if (options.temporary) page.addClass(this.options.temporaryClass);
             }
             // animate!
             if (current.length) {
@@ -613,7 +637,7 @@ var PageStack = (function(global, $) {
         /** Close current page */
         closePage : function() {
             this.getActivePage().addClass(this.options.temporaryClass);
-            this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'), {reverse : true});
+            this.openPage(this.getLastPage(':not(.' + this.options.pageActiveClass + ')'), {backward : true});
         },
 
         /** Reload current page */
@@ -754,7 +778,7 @@ var PageStack = (function(global, $) {
 
             page.addClass(this.options.animateClass);
             page.addClass(this.options.animateClass + '-' + type);
-            if (options.reverse) page.addClass(this.options.animateClass + '-reverse');
+            if (options.backward) page.addClass(this.options.animateClass + '-backward');
 
             if (next && animation.nextDelay) {
                 var oldNext = next;
@@ -782,7 +806,7 @@ var PageStack = (function(global, $) {
             if (options.animation !== false) {
                 page.removeClass(this.options.animateClass + '-' + type)
                     .removeClass(this.options.animateClass)
-                    .removeClass(this.options.animateClass + '-reverse')
+                    .removeClass(this.options.animateClass + '-backward')
                     ;
             }
             if (type === 'close') {
@@ -800,19 +824,21 @@ var PageStack = (function(global, $) {
                 ;
 
             if (options.replace === undefined) options.replace = $link.is(this.options.linkReplaceSelector);
-            if (options.reverse === undefined) options.reverse = $link.is(this.options.linkReverseSelector);
+            if (options.backward === undefined) options.backward = $link.is(this.options.linkBackwardSelector);
+            if (options.history === undefined && $link.is(this.options.nohistorySelector)) options.history = false;
+            if (options.temporary === undefined && $link.hasClass(this.options.temporaryClass)) options.temporary = true;
 
             // check special cases
             if ($link.is(this.options.linkCloseSelector)) {
                 if (this.getPages().length > 1) {
                     this.closePage();
                     return false;
-                } else options.reverse = true;
+                } else options.backward = true;
             } else if ($link.is(this.options.linkNextSelector)) {
                 if (this.findPageNavSybling(this.getActivePage(), true).click().length > 0) return false;
             } else if ($link.is(this.options.linkPrevSelector)) {
                 var click = $.Event("click");
-                options.reverse = true;
+                options.backward = true;
                 click.pagestackOptions = options;
                 if (this.findPageNavSybling(this.getActivePage(), false).trigger(click).length > 0) return false;
             }
@@ -847,6 +873,15 @@ var PageStack = (function(global, $) {
             page.addClass(this.options.pageActiveClass);
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
+            // store in history stack if not a loading page or first opening
+            if ((this.options.history || options.history) && 
+                    options.history !== false &&
+                    !options.firstOpening &&
+                    !page.is(this.options.loadingClass) && 
+                    !page.is(this.options.nohistorySelector)
+            ) {
+                $.address.value(this.getPageUrl(page, true));
+            }
         },
 
         _onPageClosed : function(page, options) {
@@ -895,10 +930,10 @@ var PageStack = (function(global, $) {
 
     PageStack.animations.slide = function(page, type, options, next) {
         var width = this.getContainer().innerWidth() + 60,
-            left = (type !== 'close' ? 0 : ((options.reverse ? 1 : -1) * width))
+            left = (type !== 'close' ? 0 : ((options.backward ? 1 : -1) * width))
         ;
         if (type !== 'close') {
-            page.css('left', (options.reverse ? -1 : 1) * width + 'px');
+            page.css('left', (options.backward ? -1 : 1) * width + 'px');
         }
         if (options.delay) page.delay(options.delay, options.queue);
         page[options.animateMethod]({
