@@ -1,7 +1,8 @@
 <?php 
-if (preg_match('~\.js~', $_SERVER['REQUEST_URI'])) {
+$match = array();
+if (preg_match('~((?:vendor/)?[-_.a-z0-9]+\.js)$~', $_SERVER['REQUEST_URI'], $match)) {
     header('Content-type: text/javascript');
-    readfile(__DIR__ . '/../' . basename($_SERVER['REQUEST_URI']));
+    readfile(__DIR__ . '/../' . $match[1]);
     return;
 } elseif (preg_match('~\.css~', $_SERVER['REQUEST_URI'])) {
     header('Content-type: text/css');
@@ -22,9 +23,8 @@ if (preg_match('~(?:([_0-9a-z]+)-)?([^/]+)\.html$~', $_SERVER['REQUEST_URI'], $t
     <head>
         <script src="http://code.jquery.com/jquery-1.9.0.js"></script>
         <script src="http://code.jquery.com/jquery-migrate-1.0.0.js"></script>
-        <!-- Please use your local copy of jquery.transit in your projects! This is here only for testing... -->
-        <!-- <script src="http://ricostacruz.com/jquery.transit/jquery.transit.js"></script> -->
-        <script src="/jquery.transit.js"></script>
+        <script src="/vendor/jquery.transit.js"></script>
+        <script src="/vendor/jquery.address.js"></script>
         <script src="/pagestack.js"></script>
         <link rel="stylesheet" type="text/css" href="/test/test.css" />
     </head>
