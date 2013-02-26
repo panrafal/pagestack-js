@@ -140,6 +140,11 @@ var PageStack = (function(global, $) {
                     queue       : false,
                     animateChildren: true,
                     //animateMethod: 'animate' // transit has problems with multiple animations
+                },
+                resize : {
+                    motion      : 'containerResize',
+                    duration    : 200,
+                    animateChildren: false
                 }
             },
 
@@ -157,7 +162,14 @@ var PageStack = (function(global, $) {
                 STRING with content
                 jQuery with content
                 Deferred object */
-            contentProvider : null
+            contentProvider : null,
+                    
+            /** When enabled, container will be resized on page open and window resize. It will
+                accomodate the active page, and will use resize animation.
+                You can resize by hand using resizeContainer().
+                You can specify the interval in ms to keep the container constantly updated.
+                */
+            autoResize      : false
         },
 
         /** Initialize PageStack */
@@ -172,17 +184,21 @@ var PageStack = (function(global, $) {
                 ;
             if (!this.$container.length) throw new Error('Pagestack container is missing or already occupied!');
             if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
+            this.uniqueId = this.options.id + '-' + PageStack.uniqueId++;
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
 
             if (this.options.history && !$.address) this.options.history = false;
             if (this.options.history) PageStack._initializeGlobalHistory();
                 
             this.getLinksContainer()
-                .on('click', this.options.linkSelector, $.proxy(this._onLinkClick, this))
+                .on('click.pagestack.pagestack-' + this.uniqueId, this.options.linkSelector, $.proxy(this._onLinkClick, this))
                 ;
 
             this.$pagesContainer = (this._resolveSelector(this.options.pagesContainer, this.$container) || this.$container)
                 .first();
+
+            if (this.options.autoResize === true) $(window).on('resize.pagestack.pagestack-' + this.uniqueId, $.proxy(this.resizeContainer, this));
+            else this._autoResizeTimeout = window.setTimeout($.proxy(this.resizeContainer, this), this.options.autoResize);
 
             var initializeLater = $.proxy(function () {
 
@@ -222,7 +238,15 @@ var PageStack = (function(global, $) {
             setTimeout(initializeLater, 0);
         },
 
-
+        _deinitialize : function() {
+            if (!this.initialized) return;
+            
+            $(window).off('pagestack-' + this.uniqueId);
+            
+            if (this._autoResizeTimeout) window.clearTimeout(this._autoResizeTimeout);
+            
+            this.initialized = false;
+        },
 
         _initializePage : function(page, options) {
             if (!page.attr(PageStack.ATTR_URL)) {
@@ -688,6 +712,26 @@ var PageStack = (function(global, $) {
             }
         },
 
+        resizeContainer : function(options) {
+            // reset timeout counter
+            if (this._autoResizeTimeout && typeof this.options.autoResize === 'number') {
+                window.clearTimeout(this._autoResizeTimeout);
+                this._autoResizeTimeout = window.setTimeout($.proxy(this.resizeContainer, this), this.options.autoResize);
+            }
+            if (this.getPagesContainer().is(':visible') === false) return;
+            if (!options) options = {};
+            this._animatePage(this.getPagesContainer(), 'resize', options);
+        },
+
+        removePage : function(page) {
+            // uninitialize any child pagestacks
+            page.find('[' + PageStack.ATTR_CONTAINER + ']').each(function() {
+                PageStack.getPageStack(this)._deinitialize();
+            });
+            this._triggerPageEvent(page, 'destroy', {});
+            page.remove();
+        },
+
         _cleanupOldPages : function() {
             // clean all old pages
             if (this.options.pagesLimit >= 0) {
@@ -700,9 +744,7 @@ var PageStack = (function(global, $) {
                 if (pages.length > this.options.pagesLimit) {
                     pages = pages.slice(0, pages.length - this.options.pagesLimit);
                     pages.each(function() {
-                        var $this = $(this);
-                        self._triggerPageEvent($this, 'destroy', {});
-                        $this.remove();
+                        self.removePage($(this));
                     });
                 }
             }
@@ -748,8 +790,8 @@ var PageStack = (function(global, $) {
                 pages.removeClass(this.options.pageActiveClass);
                 // run events when the page is fully loaded
                 $(function() {
-                    self._onPageOpen(page, {});
-                    self._onPageOpened(page, {});
+                    self._onPageOpen(page, options);
+                    self._onPageOpened(page, options);
                 });
             } else if (!page.hasClass(this.options.pageActiveClass)) {
                 // page could be already activated by loading page
@@ -903,14 +945,18 @@ var PageStack = (function(global, $) {
                 PageStack._urlHistory[url] = this.getBaseUrl();
                 $.address.value(url);
             }
+            if (this.options.autoResize) {
+                this.resizeContainer(
+                    options.firstOpening || options.animation === false ? {animation : {duration : 0, delay : 0}} : {}
+                );
+            }
         },
 
         _onPageClosed : function(page, options) {
             // page.css('display', 'none');
             this._triggerPageEvent(page, 'closed', options);
             if (page.hasClass(this.options.destroyingClass)) {
-                this._triggerPageEvent(page, 'destroy', options);
-                page.detach();
+                this.removePage(page);
                 page = null;
             }
             this._cleanupOldPages();
@@ -1047,6 +1093,35 @@ var PageStack = (function(global, $) {
                 queue    : options.queue,
                 complete : next
             });
+    };
+
+    /** Dont use this animation for anything other than container resize animation */
+    PageStack.animations.containerResize = function(page, type, options, next) {
+        var activePage = this.getActivePage(),
+            height = activePage.outerHeight(),
+            minHeight = parseInt(page.css('min-height')) || 0,
+            maxHeight = parseInt(page.css('max-height')) || 0;
+
+        if (!height || activePage.hasClass(this.options.loadingClass)) {
+            if (next) next();
+            return;
+        }
+        
+        if (minHeight && height < minHeight) height = minHeight;
+        if (maxHeight && height > maxHeight) height = maxHeight;
+        if (height === parseInt(page.css('height'))) {
+            if (next) next();
+            return;
+        }
+        if (options.delay) page.delay(options.delay, options.queue);
+        page[options.animateMethod]({
+                height : height + 'px'
+            }, {
+                duration : options.duration, 
+                easing   : options.easing, 
+                queue    : options.queue,
+                complete : next
+            });        
     };
 
     $.fn.pagestack = function(options) {
