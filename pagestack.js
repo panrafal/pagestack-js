@@ -638,16 +638,18 @@ var PageStack = (function(global, $) {
                 // find the page in the same container
                 var $container = this.getContainer();
                 if (options.title === undefined) options.title = html.find('title:eq(0)').text();
-                data = $container.attr('id') ? 
-                        html.find('#' + $container.attr('id'))
+                data = html.find($container.attr('id') ? '#' + $container.attr('id')
+                                : (typeof this.options.container === 'string' && 
+                                        this.options.container !== 'body' ? 
+                                            this.options.container : '>*')
+                            )
                             .find(this.options.pageSelector).eq(0)
-                            .siblings(this.options.pageSelector).addBack() 
-                        : null;
-                if (!data || data.length === 0) {
-                    // find first-level page and it's siblings
-                    data = html.find(this.options.pageSelector).eq(0)
                             .siblings(this.options.pageSelector).addBack();
-                }
+//                if (!data || data.length === 0) {
+//                    // find first-level page and it's siblings
+//                    data = html.find(this.options.pageSelector).eq(0)
+//                            .siblings(this.options.pageSelector).addBack();
+//                }
                 // try other parts...
                 if (data.length === 0) data = html.find('body');
                 if (data.length === 0) data = html;
@@ -1116,7 +1118,7 @@ var PageStack = (function(global, $) {
             minHeight = parseInt(page.css('min-height')) || 0,
             maxHeight = parseInt(page.css('max-height')) || 0;
 
-        if (!height || activePage.hasClass(this.options.loadingClass)) {
+        if (!height || !activePage.length || activePage.hasClass(this.options.loadingClass)) {
             if (next) next();
             return;
         }
