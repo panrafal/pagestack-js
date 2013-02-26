@@ -605,7 +605,10 @@ var PageStack = (function(global, $) {
                 // animate...
                 this._animatePage(page, 'loaded', options);
             }
-
+            
+            if (this.options.titleAttribute && options.title && !page.attr(this.options.titleAttribute)) {
+                page.attr(this.options.titleAttribute, options.title);
+            }
             if (options.temp) page.addClass(this.options.temporaryClass);
 
             // initialize, even again...
@@ -631,6 +634,7 @@ var PageStack = (function(global, $) {
                 html.get(0).innerHTML = data;
                 // find the page in the same container
                 var $container = this.getContainer();
+                if (options.title === undefined) options.title = html.find('title:eq(0)').text();
                 data = $container.attr('id') ? 
                         html.find('#' + $container.attr('id'))
                             .find(this.options.pageSelector).eq(0)
