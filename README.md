@@ -166,5 +166,14 @@ initMyGallery() {
 .ps-page.ps-active, .ps-page.ps-animate {
     display:block;
 }
+.ps-page.ps-active.ps-animate-wait {
+    /* when the page waits for it's open animation it's already active
+       we need to hide it */
+    display:none;
+}
 
 ```
+
+## API
+
+You can find all available methods and options in the annotated source code.

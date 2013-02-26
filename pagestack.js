@@ -127,7 +127,7 @@ var PageStack = (function(global, $) {
                     easing      : undefined,
                     queue       : true,
                     nextDelay   : 0, // delay for the next animation (in open+close queues)
-                    nextOverlap : true, // if next animation should start immediately, or after the first one
+                    nextOverlap : false, // if next animation should start immediately, or after the first one
                     animateMethod : $.fn.transition !== undefined ? 'transition' : 'animate',
                     /* Animate page's children, not the page itself (good for parallel anims - see loaded) */
                     animateChildren: false,
@@ -149,7 +149,7 @@ var PageStack = (function(global, $) {
                 FALSE - current page will be closed. Container will have ps-loading class set
                 NULL - nothing will happen. Container will have ps-loading class set
              */
-            showLoadingPage : null,
+            showLoadingPage : false,
 
             /** Callback function accepting(url, options) and returning:
                 FALSE if URL is not handled at all
@@ -776,6 +776,7 @@ var PageStack = (function(global, $) {
          * @param forward true|false
          **/
         _animatePage : function(page, type, options, next) {
+            page.removeClass(this.options.animateClass + '-wait');
             if (options.animation === false) {
                 this._onAnimationFinished(page, type, options);      
                 if (next) next();
@@ -884,9 +885,8 @@ var PageStack = (function(global, $) {
 
         _onPageOpen : function(page, options) {
             var title;
-            // reset whatever onPageClosed did...
-            // page.css('display', '');
             page.addClass(this.options.pageActiveClass);
+            page.addClass(this.options.animateClass + '-wait');
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
             if (this.options.titleAttribute && $.address && (title = page.attr(this.options.titleAttribute))) {
@@ -917,6 +917,7 @@ var PageStack = (function(global, $) {
         },
 
         _onPageOpened : function(page, options) {
+            page.removeClass(this.options.animateClass + '-wait');
             this._triggerPageEvent(page, 'opened', options);
         },
 
