@@ -884,7 +884,7 @@ var PageStack = (function(global, $) {
         },
 
         _onLinkClick : function(e) {
-            var $link = $(e.target), 
+            var $link = $(e.currentTarget), 
                 url = $link.attr('href'),
                 options = e.pagestackOptions || {},
                 nav
