@@ -87,6 +87,9 @@ var PageStack = (function(global, $) {
             /** If you want the nav-link parent to also receive linkActiveClass - set it's selector */
             navParentSelector : null,
 
+            /** Only urls passing this regular expression will be handled by this pagestack */
+            urlFilter       : false,
+
             history         : true,
 
             /** CSS class for pages */
@@ -906,6 +909,13 @@ var PageStack = (function(global, $) {
             }
 
             // ignore some links...
+            if (this.options.urlFilter) {
+                if (typeof this.options.urlFilter === 'function') {
+                    if (!this.options.urlFilter.call(this, url, $link)) return;
+                } else {
+                    if (!url.match(this.options.urlFilter)) return;
+                }
+            }
             if (!url || url === '' || url.match(/^[\w]+:/)) return;
             if ($link.attr('onclick') || $link.attr('target') || url === '#') return;
             if ($link.is(this.options.linkExternalSelector)) return;

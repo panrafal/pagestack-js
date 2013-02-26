@@ -7,8 +7,10 @@ these are regular, html webpages. You don't have to generate anything, you don't
 SEO specialists will love you, because every address has it's physical location. Users will love you to, 
 because they can use those URLs, or open pages in new tabs without any interference.
 
-PageStack allows to create stacks on many levels, animating just the parts that make sense. And in situations
+PageStack allows to create stacks on many levels, animating just specific parts. And in situations
 where it does make sense to generate stuff on the client side (think galleries), PageStack handles this also!
+
+There is one caveat though - the whole 'pagestacked' website should use a common set of css styles and js scripts. So that every loaded page fragment has all required scripts and styles ready. Otherwise you have to employ conditional loading, load some parts of the website traditional way or use iframes.
 
 
 ## Prerequisites
