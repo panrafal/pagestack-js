@@ -120,6 +120,8 @@ var PageStack = (function(global, $) {
             linkPrevSelector : '.ps-prev',
             linkExternalSelector : '.ps-external',
 
+            hashPrefix       : 'ps-',
+
             titleAttribute  : 'title',
 
             animation : {
@@ -350,7 +352,12 @@ var PageStack = (function(global, $) {
         /** Returns all navigation links */
         getNavLinks : function() {
             if (!this.options.navSelector) return $();
-            return this.getNavContainer().find(this.options.navSelector);
+            return this.getNavContainer().find(this.options.navSelector)
+                .not(this.options.linkNextSelector)
+                .not(this.options.linkPrevSelector)
+                .not(this.options.linkCloseSelector)
+//                .not('[href^="#' + this.options.hashPrefix + '"]')
+                ;
         },
 
         /** Returns page's navigation link */
@@ -367,11 +374,7 @@ var PageStack = (function(global, $) {
             // relative urls too
             if (urlParts[2]) selector += ',[href="#' + encodeURI(urlParts[2]) + '"]';
 
-            result = this.getNavLinks().filter(selector)
-                .not(this.options.linkNextSelector)
-                .not(this.options.linkPrevSelector)
-                .not(this.options.linkCloseSelector)
-                ;
+            result = this.getNavLinks().filter(selector);
 
             // include the nav parent
             if (includeParent && this.options.navParentSelector) result = result.parents(this.options.navParentSelector).addBack();
@@ -445,6 +448,9 @@ var PageStack = (function(global, $) {
             options.urlHash = urlParts[2];
             if (page && page.length) {
                 return page;
+            } else if (options.urlHash && this.options.hashPrefix && options.urlHash.indexOf(this.options.hashPrefix) === 0) {
+                // special hash
+                return this.loadSpecialId(options.urlHash.substr(this.options.hashPrefix.length), options);
             } else {
                 deferred = this.resolveUrl(url, options);
                 if (deferred === false) return false;
@@ -474,6 +480,36 @@ var PageStack = (function(global, $) {
                 type : 'get',
                 dataType : 'html'
             });
+        },
+
+        loadSpecialId : function(id, options) {
+            var url, page;
+            switch(id) {
+                case 'first':
+                    url = this.getNavLinks().first().attr('href');
+                    break;
+                case 'last':
+                    url = this.getNavLinks().last().attr('href');
+                    break;
+                case 'prev':
+                    url = this.findPageNavSybling(this.getActivePage(), false).attr('href');
+                    break;
+                case 'next':
+                    url = this.findPageNavSybling(this.getActivePage(), true).attr('href');
+                    break;
+                case 'next-page':
+                    if ((page = this.getActivePage().next(this.options.pageSelector)).length) return page;
+                case 'first-page':
+                    return this.getPages().first();
+                case 'prev-page':
+                    if ((page = this.getActivePage().prev(this.options.pageSelector)).length) return page;
+                case 'last-page':
+                    return this.getPages().last();
+            }
+            if (url) {
+                return this.loadPageUrl(url, options);
+            }
+            return null;
         },
 
         /** Opens specified URL.
