@@ -423,7 +423,7 @@ var PageStack = (function(global, $) {
                 this._onPageOpen(page, options);
                 if (options.temporary) page.addClass(this.options.temporaryClass);
             }
-            // animate!
+            // animate! but if it's not during open animation
             if (current.length) {
                 this._animatePage(current, 'close', options, function() {
                     if (page && page.length) self._animatePage(page, 'open', options);
@@ -736,7 +736,7 @@ var PageStack = (function(global, $) {
         /** Cancel currently loading page. Bring back the last one... */
         cancelLoad : function(justCancel) {
             if (this._loading) {
-                this._loading.abort();
+                if (this._loading.abort) this._loading.abort();
                 this._loading = null;
                 this.showLoader(false);
             }
@@ -784,7 +784,7 @@ var PageStack = (function(global, $) {
                         '.' + this.options.pageActiveClass + 
                         ', .' + this.options.permanentClass + 
                         ', .' + this.options.destroyingClass + 
-                        ', .' + this.options.animateClass),
+                        ', [class*="' + this.options.animateClass + '"]'),
                     self = this;
                 if (pages.length > this.options.pagesLimit) {
                     pages = pages.slice(0, pages.length - this.options.pagesLimit);
@@ -912,6 +912,7 @@ var PageStack = (function(global, $) {
                     .removeClass(this.options.animateClass + '-backward')
                     ;
             }
+            
             if (type === 'close') {
                 this._onPageClosed(page, options);
             } else if (type === 'open') {
@@ -1016,7 +1017,10 @@ var PageStack = (function(global, $) {
 
         _onPageOpened : function(page, options) {
             page.removeClass(this.options.animateClass + '-wait');
-            this._triggerPageEvent(page, 'opened', options);
+            if (page.hasClass(this.options.pageActiveClass) === false) {
+                // it's already closed!
+                this._triggerPageEvent(page, 'opened', options);
+            }
         },
 
         _triggerPageEvent : function(page, event, options) {
