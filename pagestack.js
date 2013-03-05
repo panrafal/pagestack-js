@@ -386,14 +386,18 @@ var PageStack = (function(global, $) {
             return result;
         },
 
-        findPageNavSybling : function(page, next) {
+        findPageNavSybling : function(page, next, loop) {
             var nav = this.findPageNavLink(page, false)
-                    .eq(0);
-            return nav[next ? 'next' : 'prev'](this.options.navSelector)
-                .not(this.options.linkNextSelector)
-                .not(this.options.linkPrevSelector)
-                .not(this.options.linkCloseSelector)
-                ;
+                    .eq(0),
+                links = this.getNavLinks().toArray(),
+                index = links.indexOf(nav.get(0));
+            if (next) {
+                if (index < 0 || index >= links.length -1) return loop ? $(links[0]) : $();
+                return $(links[index + 1]);
+            } else {
+                if (index <= 0) return loop ? $(links[links.length - 1]) : $();
+                return $(links[index - 1]);
+            }
         },
 
         /** Opens specified page, or just closes current one if `page` is null/empty 
