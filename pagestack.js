@@ -141,6 +141,7 @@ var PageStack = (function(global, $) {
                     animateMethod : $.fn.transition !== undefined ? 'transition' : 'animate',
                     /* Animate page's children, not the page itself (good for parallel anims - see loaded) */
                     animateChildren: false,
+                    animateClass: true
                     },
                 /* Animation called after loading deferred data while using showLoadingPage:true */    
                 loaded : {
@@ -154,7 +155,8 @@ var PageStack = (function(global, $) {
                 resize : {
                     motion      : 'containerResize',
                     duration    : 200,
-                    animateChildren: false
+                    animateChildren: false,
+                    animateClass : false
                 }
             },
 
@@ -888,8 +890,11 @@ var PageStack = (function(global, $) {
             if (animation.motion && typeof(animation.motion) !== 'function')
                 animation.motion = PageStack.animations[animation.motion];
 
-            page.addClass(this.options.animateClass);
-            page.addClass(this.options.animateClass + '-' + type);
+            if (animation.animateClass) {
+                page.addClass(animation.animateClass === true ? 
+                        this.options.animateClass + ' ' + this.options.animateClass + '-' + type :
+                        animation.animateClass);
+            }
             if (options.backward) page.addClass(this.options.animateClass + '-backward');
 
             if (next && animation.nextDelay) {
@@ -898,7 +903,7 @@ var PageStack = (function(global, $) {
             }
 
             var onFinished = function() {
-                self._onAnimationFinished(page, type, options);
+                self._onAnimationFinished(page, type, animation);
                 if (next && !animation.nextOverlap) {
                     next();
                 }
@@ -916,10 +921,12 @@ var PageStack = (function(global, $) {
         
         _onAnimationFinished : function(page, type, options) {
             if (options.animation !== false) {
-                page.removeClass(this.options.animateClass + '-' + type)
-                    .removeClass(this.options.animateClass)
-                    .removeClass(this.options.animateClass + '-backward')
-                    ;
+                if (options.animateClass) {
+                    page.removeClass(options.animateClass === true ? 
+                            this.options.animateClass + ' ' + this.options.animateClass + '-' + type :
+                            options.animateClass);
+                }
+                if (options.backward) page.removeClass(this.options.animateClass + '-backward');
             }
             
             if (type === 'close') {
