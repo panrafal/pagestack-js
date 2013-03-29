@@ -127,7 +127,7 @@ var PageStack = (function(global, $) {
 
             hashPrefix       : 'ps-',
 
-            titleAttribute  : 'title',
+            titleAttribute  : 'data-title',
 
             animation : {
                 all : {
