@@ -15,7 +15,7 @@ PageStack is a global class. You can extend is as you want, as practically every
 Be aware that functions and properties prefixed with '_' are *internal* and may change without prior notice.
 
 # Events
-* page-ready(e, pagestack, pages) called on window after page load, before showing
+* page-ready(e, pagestack) called on page after page load, before showing
 * page-open(e, pagestack) called on page just before opening
 * page-opened(e, pagestack) called on page after opening
 * page-close(e, pagestack) called on page before closing
@@ -1033,8 +1033,8 @@ var PageStack = (function(global, $) {
 
         _onPageOpened : function(page, options) {
             page.removeClass(this.options.animateClass + '-wait');
-            if (page.hasClass(this.options.pageActiveClass) === false) {
-                // it's already closed!
+            if (page.hasClass(this.options.pageActiveClass) !== false) {
+                // is it closed?
                 this._triggerPageEvent(page, 'opened', options);
             }
         },
