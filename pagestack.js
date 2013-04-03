@@ -982,6 +982,9 @@ var PageStack = (function(global, $) {
                 if (this.getPages().length > 1) {
                     this.closePage();
                     return false;
+                } else if (this.options.history && !$.isEmptyObject(PageStack._urlHistory)) {
+                    PageStack.historyAdapter.back();
+                    return false;
                 } else options.backward = true;
             } else if ($link.is(this.options.linkNextSelector)) {
                 if (this.findPageNavSybling(this.getActivePage(), true).click().length > 0) return false;
