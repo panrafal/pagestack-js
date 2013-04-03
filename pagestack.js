@@ -48,6 +48,11 @@ var PageStack = (function(global, $) {
     PageStack.animations = {
     };
 
+    PageStack.historyAdapter = null;
+    if (window.history && window.history.pushState) {
+        PageStack.historyAdapter = window.history;
+    }
+
     PageStack._urlHistory = {};
 
     PageStack.prototype = {
@@ -202,7 +207,7 @@ var PageStack = (function(global, $) {
             this.uniqueId = this.options.id + '-' + PageStack.uniqueId++;
             this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
 
-            if (this.options.history && !$.address) this.options.history = false;
+            if (!PageStack.historyAdapter) this.options.history = false;
             if (this.options.history) PageStack._initializeGlobalHistory();
                 
             this.getLinksContainer()
@@ -1024,9 +1029,7 @@ var PageStack = (function(global, $) {
             page.addClass(this.options.animateClass + '-wait');
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
-            if (this.options.titleAttribute && $.address && (title = page.attr(this.options.titleAttribute))) {
-                $.address.title(title);
-            }
+            
             // store in history stack if not a loading page or first opening
             if ((this.options.history || options.history) && 
                     options.history !== false &&
@@ -1035,8 +1038,11 @@ var PageStack = (function(global, $) {
                     !page.is(this.options.nohistorySelector)
             ) {
                 var url = this.getPageUrl(page, true);
+                if (this.options.titleAttribute) {
+                    title = page.attr(this.options.titleAttribute);
+                }
                 PageStack._urlHistory[url] = this.getBaseUrl();
-                $.address.value(url);
+                PageStack.historyAdapter.pushState(null, title, url);
             }
             if (this.options.autoResize) {
                 this.resizeContainer(
@@ -1101,19 +1107,17 @@ var PageStack = (function(global, $) {
         var self = this;
         if (this._initializedGlobalHistory) return;
         this._initializedGlobalHistory = true;
-        $(function() {
-            setTimeout(function() {
-                $.address.externalChange($.proxy(self._onExternalAddressChange, self));
-            }, 250);
-        });
+        setTimeout(function() {
+            $(window).on('popstate', $.proxy(self._onHistoryChange, this));
+        }, 250);
     };
 
-    PageStack._onExternalAddressChange = function(event) {
-        var url = event.value,
+    PageStack._onHistoryChange = function(event) {
+        var url = (PageStack.historyAdapter.location || window.location) + '',
             urlParts = url.match(URLPARTS_REGEX),
             selector = '', page, container, parentStack;
-        console.log(event);
-
+    
+        if (urlParts[URLPART_ORIGIN]) url = url.replace(urlParts[URLPART_ORIGIN], '');
         // find page with this url
         selector = '[' + PageStack.ATTR_PAGE + ']';
         selector += '[' + PageStack.ATTR_URL + '="' + encodeURI(urlParts[URLPART_URI]) + '"]';
