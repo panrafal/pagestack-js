@@ -129,6 +129,9 @@ var PageStack = (function(global, $) {
 
             titleAttribute  : 'data-title',
 
+            /** Options for scrollTo (if available) */
+            scroll : {duration : 500},
+
             animation : {
                 all : {
                     motion      : 'slide',
@@ -442,6 +445,7 @@ var PageStack = (function(global, $) {
             } else {
                 if (page && page.length) this._animatePage(page, 'open', options);
             }
+            if (page && page.length && this.options.scroll) this.scrollIntoView(page, this.options.scroll);
         },
 
         /** Tries to find existing page with that URL, or resolve and load one.
@@ -542,9 +546,10 @@ var PageStack = (function(global, $) {
             return page;
         },
 
+        /** Opens page with specified content */
         openContent : function(content, options) {
             if (!options) options = {};
-            page = this.createPage(data, page, options);
+            var page = this.parsePages(content, null, options);
             this.openPage(page);
             return page;
         },
@@ -786,6 +791,25 @@ var PageStack = (function(global, $) {
             });
             this._triggerPageEvent(page, 'destroy', {});
             page.remove();
+        },
+
+        scrollIntoView : function(page, options) {
+            var winh = $(window).height(),
+                winy = $(window).scrollTop(),
+                pagey = $(page).offset().top,
+                margin = 0.1
+                ;
+                
+            if (pagey > winy - winh * margin && pagey < winy + winh - winh * margin) {
+                // in view already
+                return;
+            }
+                
+            if ($.fn.scrollTo) {
+                $(window).scrollTo(page, options);
+            } else {
+                $(window).scrollTop(pagey - winh * margin);
+            }
         },
 
         _cleanupOldPages : function() {
