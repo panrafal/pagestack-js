@@ -59,6 +59,8 @@ var PageStack = (function(global, $) {
 
         $container : null,
         $pagesContainer : null,
+        id : null,
+        uniqueId : null,
 
         _loading : null,
 
@@ -203,9 +205,9 @@ var PageStack = (function(global, $) {
                 .data('pagestack', this)
                 ;
             if (!this.$container.length) throw new Error('Pagestack container is missing or already occupied!');
-            if (!this.options.id) this.options.id = this.$container.attr('id') || PageStack.uniqueId++;
-            this.uniqueId = this.options.id + '-' + PageStack.uniqueId++;
-            this.$container.attr(PageStack.ATTR_CONTAINER, this.options.id);
+            this.id = this.options.id || this.$container.attr('id') || 'ps-' + PageStack.uniqueId++;
+            this.uniqueId = this.id + '-' + PageStack.uniqueId++;
+            this.$container.attr(PageStack.ATTR_CONTAINER, this.id);
 
             if (!PageStack.historyAdapter) this.options.history = false;
             if (this.options.history) PageStack._initializeGlobalHistory();
@@ -276,7 +278,8 @@ var PageStack = (function(global, $) {
                 // set page's id if it's missing and it's dynamically generated page
                 // if (urlParts[URLPART_HASH] && !page.attr('id')) page.attr('id', urlParts[URLPART_HASH]);
             }
-            page.attr(PageStack.ATTR_PAGE, this.options.id);
+            if (pageUrl) {
+            page.attr(PageStack.ATTR_PAGE, this.id);
             this._triggerPageEvent(page, 'ready', options);
         },
 
@@ -299,7 +302,7 @@ var PageStack = (function(global, $) {
         getPages : function() {
             return this.getPagesContainer()
                 .children(this.options.pageSelector);
-                // .filter('[' + PageStack.ATTR_PAGE + '="' + this.options.id + '"]');
+                // .filter('[' + PageStack.ATTR_PAGE + '="' + this.id + '"]');
         },
 
         /** Returns active page. 
@@ -1105,6 +1108,17 @@ var PageStack = (function(global, $) {
         var found = $(node).closest('[' + PageStack.ATTR_CONTAINER + ']');
         return returnJQuery ? found : found.data('pagestack');
     };
+    
+    PageStack.getPageStackById = function(id, returnJQuery) {
+        var found;
+        if (id) {
+            found = $('[' + PageStack.ATTR_CONTAINER + '="' + encodeURIComponent(id) + '"]:first');
+        } else {
+            // or use the global (first) one
+            found = $('[' + PageStack.ATTR_CONTAINER + ']:first');
+        }
+        return returnJQuery ? found : found.data('pagestack');
+    }
 
     PageStack._initializeGlobalHistory = function() {
         var self = this;
