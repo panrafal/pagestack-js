@@ -271,12 +271,14 @@ var PageStack = (function(global, $) {
         },
 
         _initializePage : function(page, options) {
-            if (!page.attr(PageStack.ATTR_URL)) {
+            var pageUrl = page.attr(PageStack.ATTR_URL);
+            if (!pageUrl) {
                 var urlParts = (options.url || '').match(URLPARTS_REGEX);
                 // remember the page's URL, or use stack's url
                 page.attr(PageStack.ATTR_URL, urlParts[URLPART_URI] || this.getBaseUrl());
                 // set page's id if it's missing and it's dynamically generated page
                 // if (urlParts[URLPART_HASH] && !page.attr('id')) page.attr('id', urlParts[URLPART_HASH]);
+                if (!pageUrl) pageUrl = urlParts[URLPART_URI];
             }
             if (pageUrl) {
             page.attr(PageStack.ATTR_PAGE, this.id);
@@ -365,6 +367,11 @@ var PageStack = (function(global, $) {
         /** Return URL of this pagestack */
         getBaseUrl : function() {
             return this.getContainer().attr(PageStack.ATTR_URL);
+        },
+
+        /** Returns parent pagestack (if any) */
+        getParentStack : function() {
+            return PageStack.getPageStack(this.getContainer().parent());
         },
 
         /** Returns all navigation links */
@@ -985,7 +992,7 @@ var PageStack = (function(global, $) {
                 if (this.getPages().length > 1) {
                     this.closePage();
                     return false;
-                } else if (this.options.history && !$.isEmptyObject(PageStack._urlHistory)) {
+                } else if (this.options.history && PageStack.historyAdapter.state && PageStack.historyAdapter.state.pagestack) {
                     PageStack.historyAdapter.back();
                     return false;
                 } else options.backward = true;
@@ -1039,17 +1046,22 @@ var PageStack = (function(global, $) {
             // store in history stack if not a loading page or first opening
             if ((this.options.history || options.history) && 
                     options.history !== false &&
-                    !options.firstOpening &&
                     !page.is(this.options.loadingClass) && 
                     !page.is(this.options.nohistorySelector)
             ) {
                 var url = this.getPageUrl(page, true);
-                if (this.options.titleAttribute) {
-                    title = page.attr(this.options.titleAttribute);
+                if (!options.firstOpening) {
+                    if (this.options.titleAttribute) {
+                        title = page.attr(this.options.titleAttribute);
+                    }
+                    //PageStack._urlHistory[url] = this.getBaseUrl();
+                    PageStack.historyAdapter.pushState({pagestack : this.id}, title, url);
                 }
-                PageStack._urlHistory[url] = this.getBaseUrl();
-                PageStack.historyAdapter.pushState(null, title, url);
+                if (!PageStack._urlHistory[url]) PageStack._urlHistory[url] = []; 
+                if (PageStack._urlHistory[url].indexOf(this.id) < 0) PageStack._urlHistory[url].push(this.id);
             }
+            
+            
             if (this.options.autoResize) {
                 this.resizeContainer(
                     options.firstOpening || options.animation === false ? {animation : {duration : 0, delay : 0}} : {}
@@ -1132,64 +1144,59 @@ var PageStack = (function(global, $) {
     PageStack._onHistoryChange = function(event) {
         var url = (PageStack.historyAdapter.location || window.location) + '',
             urlParts = url.match(URLPARTS_REGEX),
-            selector = '', page, container, parentStack;
-    
+            state = PageStack.historyAdapter.state,
+            selector = '', page, container, pagestack, parentStack, i;
+        console.log('state: ', PageStack.historyAdapter.state);
+        // uri only
         if (urlParts[URLPART_ORIGIN]) url = url.replace(urlParts[URLPART_ORIGIN], '');
-        // find page with this url
-        selector = '[' + PageStack.ATTR_PAGE + ']';
-        selector += '[' + PageStack.ATTR_URL + '="' + encodeURI(urlParts[URLPART_URI]) + '"]';
-        if (urlParts[URLPART_HASH]) selector += '[id="' + encodeURI(urlParts[URLPART_HASH]) + '"]';
-        selector += ':first';
 
-        page = $(selector);
-        container = page.length ? PageStack.getPageStack(page, true) : $();
-
-        // get container from the history
-        if (!container.length && PageStack._urlHistory[url]) {
-            container = $(
-                '[' + PageStack.ATTR_CONTAINER + ']' + 
-                '[' + PageStack.ATTR_URL + '="' + PageStack._urlHistory[url] + '"]' +
-                ':first'
-            );
+        // find container or use the global (this) one
+        if (state && state.pagestack) pagestack = PageStack.getPageStackById(state.pagestack);
+        if (!pagestack) pagestack = PageStack.getPageStackById();
+        if (!pagestack) {
+            console.log('no pagestack found. wtf?');
+            return;
         }
-
-        // or from the page
-
-        // or at least container to open the hash
-        if (!page.length && urlParts[URLPART_HASH]) {
-            container = $(
-                '[' + PageStack.ATTR_CONTAINER + ']' + 
-                '[' + PageStack.ATTR_URL + '="' + encodeURI(urlParts[URLPART_URI]) + '"]' +
-                ':first'
-            );
+        container = pagestack.getPagesContainer();
+        
+        // check if this page exists on every pagestack
+        if (PageStack._urlHistory[url]) {
+            for (i in PageStack._urlHistory[url]) {
+                var ps = PageStack.getPageStackById(PageStack._urlHistory[url][i]),
+                    found = ps && ps.getPage(url);
+                if (!found || !found.length) {
+                    // if not, we have to reload
+                    page = $();
+                    break;
+                } else if (ps === pagestack) {
+                    page = found;
+                }
+            }
+        } else {
+            page = pagestack.getPage(url);
         }
-
-        // if everything fails, use global (first) container
-        if (!page.length && !container.length) {    
-            container = $('[' + PageStack.ATTR_CONTAINER + ']:first');
-        }
-
-        console.log('History reopen: ' + url, page, container);
+        
+        
+        console.log('History reopen: ' + url, page, pagestack);
 
         // open up all parent containers
-        parentStack = PageStack.getPageStack(container.parent());
+        parentStack = pagestack.getParentStack();
         while (parentStack) {
             var parentPage = parentStack.getPages().has(container);
             if (!parentPage.hasClass(parentStack.options.pageActiveClass)) {
                 parentStack.openPage(parentPage, {history : false, reverse : true});
             }
-            parentStack = PageStack.getPageStack(parentStack.getContainer().parent());
+            parentStack = parentStack.getParentStack();
         }
 
         // open the page
-        parentStack = PageStack.getPageStack(container);
         if (page.length) {
-            parentStack.openPage(page, {history : false, reverse : true});
+            pagestack.openPage(page, {history : false, reverse : true});
         } else {
-            parentStack.openUrl(url, {history : false, reverse : true});
+            pagestack.openUrl(url, {history : false, reverse : true, reload : true});
         }
 
-    }
+    };
 
     PageStack.animations.slide = function(page, type, options, next) {
         var width = this.getContainer().innerWidth() + 60,
