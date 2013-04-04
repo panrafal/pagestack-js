@@ -1053,6 +1053,9 @@ var PageStack = (function(global, $) {
             this.findPageNavLink(page, true).addClass(this.options.linkActiveClass);
             this._triggerPageEvent(page, 'open', options);
             
+            if (!options.firstOpening && this.options.titleAttribute && (title = page.attr(this.options.titleAttribute))) {
+                document.title = title;
+            }
             // store in history stack if not a loading page or first opening
             if ((this.options.history || options.history) && 
                     options.history !== false &&
@@ -1061,9 +1064,6 @@ var PageStack = (function(global, $) {
             ) {
                 var url = this.getPageUrl(page, true);
                 if (!options.firstOpening) {
-                    if (this.options.titleAttribute) {
-                        title = page.attr(this.options.titleAttribute);
-                    }
                     //PageStack._urlHistory[url] = this.getBaseUrl();
                     PageStack.historyAdapter.pushState({pagestack : this.id}, title, url);
                 }
