@@ -36,6 +36,7 @@ var PageStack = (function(global, $) {
     PageStack.ATTR_PAGE = 'data-ps-page';
     PageStack.ATTR_URL = 'data-ps-url';
     PageStack.ATTR_PAGEEVENT = 'data-ps-on';
+    PageStack.ATTR_PARENTPAGE = 'data-ps-parentpage';
     PageStack.uniqueId = 1;
     
     var URLPARTS_REGEX = /^([a-z]+:\/\/[^\/]+)?((.*?)(?:\?(.+?))?)(?:#(.*))?$/i;
@@ -281,6 +282,10 @@ var PageStack = (function(global, $) {
                 if (!pageUrl) pageUrl = urlParts[URLPART_URI];
             }
             if (pageUrl) {
+                // mark parent pages with this url as parent
+                page.parents('[' + PageStack.ATTR_PAGE + '][' + PageStack.ATTR_URL + '="' + encodeURI(pageUrl) + '"]')
+                    .attr(PageStack.ATTR_PARENTPAGE, this.id);
+            }
             page.attr(PageStack.ATTR_PAGE, this.id);
             this._triggerPageEvent(page, 'ready', options);
         },
@@ -334,13 +339,15 @@ var PageStack = (function(global, $) {
         },
 
         /** Get page by URL or ID 
+         *  @param noParents - will not return parent pages (pages that contain another page with the same url)
             @return jQuery
         */
-        getPage : function(url) {
+        getPage : function(url, noParents) {
             var parts = url.match(URLPARTS_REGEX), 
                 selector = '';
             if (parts[URLPART_URI]) selector += '[' + PageStack.ATTR_URL + '="' + encodeURI(parts[URLPART_URI]) + '"]';
             if (parts[URLPART_HASH]) selector += '[id="' + encodeURI(parts[URLPART_HASH]) + '"]';
+            if (noParents) selector += ':not([' + PageStack.ATTR_PARENTPAGE + '])';
             return this.getPages().filter(selector).first();
         },
 
@@ -466,10 +473,13 @@ var PageStack = (function(global, $) {
         /** Tries to find existing page with that URL, or resolve and load one.
             If a page is needed immediately, pass `showLoadingPage:true` in options
             @return Existing page, loading page or NULL when waiting. FALSE if URL is not supported.
+            @param options:
+                    - reload - always reload
+                    - allowParents - allows to reopen parent pages
           */
         loadPageUrl : function(url, options) {
             if (!options) options = {};
-            var page = options.reload ? null : this.getPage(url),
+            var page = options.reload ? null : this.getPage(url, !options.allowParents),
                 deferred, 
                 urlParts = url.match(URLPARTS_REGEX);
 
@@ -1146,7 +1156,6 @@ var PageStack = (function(global, $) {
             urlParts = url.match(URLPARTS_REGEX),
             state = PageStack.historyAdapter.state,
             selector = '', page, container, pagestack, parentStack, i;
-        console.log('state: ', PageStack.historyAdapter.state);
         // uri only
         if (urlParts[URLPART_ORIGIN]) url = url.replace(urlParts[URLPART_ORIGIN], '');
 
@@ -1177,7 +1186,7 @@ var PageStack = (function(global, $) {
         }
         
         
-        console.log('History reopen: ' + url, page, pagestack);
+        //console.log('History reopen: ' + url, page, pagestack);
 
         // open up all parent containers
         parentStack = pagestack.getParentStack();
