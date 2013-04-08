@@ -1208,7 +1208,7 @@ var PageStack = (function(global, $) {
     };
 
     PageStack.animations.slide = function(page, type, options, next) {
-        var width = this.getContainer().innerWidth() + 60,
+        var width = this.getContainer().innerWidth(),
             left = (type !== 'close' ? 0 : ((options.backward ? 1 : -1) * width))
         ;
         if (type !== 'close') {
@@ -1224,6 +1224,27 @@ var PageStack = (function(global, $) {
                 complete : next
             });
     };
+    
+
+    PageStack.animations.slideTranslate = function(page, type, options, next) {
+        var width = this.getContainer().innerWidth(),
+            left = (type !== 'close' ? 0 : ((options.backward ? 1 : -1) * width))
+        ;
+        if (type !== 'close') {
+            page.css('transform', 'translateX(' + (options.backward ? -1 : 1) * width + 'px' + ')');
+        } else if (type === 'close' && page.css('transform') === 'none') {
+            page.css('transform', 'translateX(0px)');
+        }
+        if (options.delay) page.delay(options.delay, options.queue);
+        page[options.animateMethod]({
+                transform : 'translateX(' + left + 'px' + ')'
+            }, {
+                duration : options.duration, 
+                easing   : options.easing, 
+                queue    : options.queue,
+                complete : next
+            });
+    };    
 
     PageStack.animations.fade = function(page, type, options, next) {
         var open = type !== 'close';
