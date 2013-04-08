@@ -15,12 +15,12 @@ PageStack is a global class. You can extend is as you want, as practically every
 Be aware that functions and properties prefixed with '_' are *internal* and may change without prior notice.
 
 # Events
-* page-ready(e, pagestack) called on page after page load, before showing
-* page-open(e, pagestack) called on page just before opening
-* page-opened(e, pagestack) called on page after opening
-* page-close(e, pagestack) called on page before closing
-* page-closed(e, pagestack) called on page after closing
-* page-destroy(e, pagestack) called on page just before destroying
+* page-ready(e, pagestack, options) called on page after page load, before showing
+* page-open(e, pagestack, options) called on page just before opening
+* page-opened(e, pagestack, options) called on page after opening
+* page-close(e, pagestack, options) called on page before closing
+* page-closed(e, pagestack, options) called on page after closing
+* page-destroy(e, pagestack, options) called on page just before destroying
 
 */
 var PageStack = (function(global, $) {
@@ -417,7 +417,7 @@ var PageStack = (function(global, $) {
             var nav = this.findPageNavLink(page, false)
                     .eq(0),
                 links = this.getNavLinks().toArray(),
-                index = links.indexOf(nav.get(0));
+                index = $.inArray(nav.get(0), links);
             if (next) {
                 if (index < 0 || index >= links.length -1) return loop ? $(links[0]) : $();
                 return $(links[index + 1]);
@@ -467,7 +467,7 @@ var PageStack = (function(global, $) {
             } else {
                 if (page && page.length) this._animatePage(page, 'open', options);
             }
-            if (page && page.length && this.options.scroll) this.scrollIntoView(page, this.options.scroll);
+            if (page && page.length && this.options.scroll && !options.firstOpening) this.scrollIntoView(page, this.options.scroll);
         },
 
         /** Tries to find existing page with that URL, or resolve and load one.
@@ -689,7 +689,7 @@ var PageStack = (function(global, $) {
             if (this.options.titleAttribute && options.title && !page.attr(this.options.titleAttribute)) {
                 page.attr(this.options.titleAttribute, options.title);
             }
-            if (options.temp) page.addClass(this.options.temporaryClass);
+            if (options.temporary) page.addClass(this.options.temporaryClass);
 
             // initialize, even again...
             this._initializePage(page, options);
@@ -1068,7 +1068,7 @@ var PageStack = (function(global, $) {
                     PageStack.historyAdapter.pushState({pagestack : this.id}, title, url);
                 }
                 if (!PageStack._urlHistory[url]) PageStack._urlHistory[url] = []; 
-                if (PageStack._urlHistory[url].indexOf(this.id) < 0) PageStack._urlHistory[url].push(this.id);
+                if ($.inArray(this.id, PageStack._urlHistory[url]) < 0) PageStack._urlHistory[url].push(this.id);
             }
             
             
@@ -1253,7 +1253,7 @@ var PageStack = (function(global, $) {
         
         if (minHeight && height < minHeight) height = minHeight;
         if (maxHeight && height > maxHeight) height = maxHeight;
-        if (height === parseInt(page.css('height'))) {
+        if (height === parseInt(page.css('height'), 10)) {
             if (next) next();
             return;
         }
