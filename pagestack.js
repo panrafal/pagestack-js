@@ -21,6 +21,8 @@ Be aware that functions and properties prefixed with '_' are *internal* and may 
 * page-close(e, pagestack, options) called on page before closing
 * page-closed(e, pagestack, options) called on page after closing
 * page-destroy(e, pagestack, options) called on page just before destroying
+* loader-show(e, pagestack) called on container when loader is shown
+* loader-hide(e, pagestack) called on container when loader is hidden
 
 */
 var PageStack = (function(global, $) {
@@ -792,8 +794,10 @@ var PageStack = (function(global, $) {
         /** Show/hide loading information */
         showLoader:function(show) {
             if (show) {
+                this.getContainer().trigger('loader-show.pagestack', [this]); 
                 this.getPagesContainer().addClass(this.options.loadingClass);
             } else {
+                this.getContainer().trigger('loader-hide.pagestack', [this]); 
                 this.getPagesContainer().removeClass(this.options.loadingClass);
             }
         },
