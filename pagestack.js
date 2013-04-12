@@ -23,6 +23,7 @@ Be aware that functions and properties prefixed with '_' are *internal* and may 
 * page-destroy(e, pagestack, options) called on page just before destroying
 * loader-show(e, pagestack) called on container when loader is shown
 * loader-hide(e, pagestack) called on container when loader is hidden
+* destroy(e, pagestack) called on container when pagestack is destroyed
 
 */
 var PageStack = (function(global, $) {
@@ -266,6 +267,7 @@ var PageStack = (function(global, $) {
         _deinitialize : function() {
             if (!this.initialized) return;
             
+            this.getContainer().trigger('destroy.pagestack', [this]);
             $(window).off('pagestack-' + this.uniqueId);
             
             if (this._autoResizeTimeout) window.clearTimeout(this._autoResizeTimeout);
