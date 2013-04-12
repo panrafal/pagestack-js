@@ -140,7 +140,7 @@ var PageStack = (function(global, $) {
             titleAttribute  : 'data-title',
 
             /** Options for scrollTo (if available) */
-            scroll : {duration : 500},
+            scroll : {duration : 500, reserve : 0.2},
 
             animation : {
                 all : {
@@ -826,7 +826,7 @@ var PageStack = (function(global, $) {
             var winh = $(window).height(),
                 winy = $(window).scrollTop(),
                 pagey = $(page).offset().top,
-                margin = 0.1
+                margin = options.reserve || 0.2
                 ;
                 
             if (pagey > winy - winh * margin && pagey < winy + winh - winh * margin) {
