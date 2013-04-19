@@ -611,7 +611,7 @@ var PageStack = (function(global, $) {
                         .addClass(this.options.loadingClass)
                         .addClass(this.options.temporaryClass)
                         ;
-                    this.openPage(page, options);
+                    this.openPage(page, $.extend({isLoadingPage : true}, options));
                 } else if (options.showLoadingPage !== null) {
                     this.openPage(null, options); 
                 } 
