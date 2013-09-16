@@ -12,6 +12,9 @@ where it does make sense to generate stuff on the client side (think galleries),
 
 There is one caveat though - the whole 'pagestacked' website should use a common set of css styles and js scripts. So that every loaded page fragment has all required scripts and styles ready. Otherwise you have to employ conditional loading, load some parts of the website traditional way or use iframes.
 
+## Showcase
+
+[ZloteTarasy.pl](http://www.zlotetarasy.pl/) - with up to 4 levels of stacks! Responsive, SEO friendly, animated.
 
 ## Prerequisites
 
