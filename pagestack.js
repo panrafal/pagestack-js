@@ -15,6 +15,8 @@ PageStack is a global class. You can extend is as you want, as practically every
 Be aware that functions and properties prefixed with '_' are *internal* and may change without prior notice.
 
 # Events
+All events are namespaced with .pagestack
+
 * page-ready(e, pagestack, options) called on page after page load, before showing
 * page-open(e, pagestack, options) called on page just before opening
 * page-opened(e, pagestack, options) called on page after opening
@@ -163,7 +165,7 @@ var PageStack = (function(global, $) {
                     delay       : 0,
                     duration    : 200,
                     queue       : false,
-                    animateChildren: true,
+                    animateChildren: true
                     //animateMethod: 'animate' // transit has problems with multiple animations
                 },
                 resize : {
@@ -195,7 +197,8 @@ var PageStack = (function(global, $) {
                 You can resize by hand using resizeContainer().
                 You can specify the interval in ms to keep the container constantly updated.
                 */
-            autoResize      : false
+            autoResize      : false,
+            debug : true
         },
 
         /** Initialize PageStack */
