@@ -1163,7 +1163,12 @@ var PageStack = (function(global, $) {
 
         _onPageLoadError : function(e, message) {
             console.log('page load error!');
-            // TODO
+            var active = this.getActivePage(true);
+            if (active.hasClass(this.options.loadingClass)) {
+                this.closePage();
+            } else if (!active.hasClass(this.options.activeClass)) {
+                this.openPage(active);
+            }
         }
     };
 
