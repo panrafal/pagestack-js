@@ -622,6 +622,22 @@ var PageStack = (function(global, $) {
             return page;
         },
 
+        /** Opens loading page, depends on showLoadingPage setting... */
+        openLoadingPage: function(options) {
+            var page = null;
+            if (options.showLoadingPage === undefined) options.showLoadingPage = this.options.showLoadingPage;
+            if (options.showLoadingPage) {
+                page = this.createPage(null, null, options)
+                    .addClass(this.options.loadingClass)
+                    .addClass(this.options.temporaryClass)
+                    ;
+                this.openPage(page, $.extend({isLoadingPage : true}, options));
+            } else if (options.showLoadingPage !== null) {
+                this.openPage(null, options); 
+            }
+            return page;
+        },
+
         /** Creates a page from a deferred object.
             Options:
             - showLoadingPage
@@ -630,7 +646,6 @@ var PageStack = (function(global, $) {
          */
         createPageFromDeferred: function(deferred, options) {
             if (!options) options = {};
-            if (options.showLoadingPage === undefined) options.showLoadingPage = this.options.showLoadingPage;
             var page, self = this, content;
 
             if (typeof deferred === 'function') deferred = deferred.call(this, options);
@@ -645,15 +660,7 @@ var PageStack = (function(global, $) {
             // show or not a loading page
             if (deferred.state() === 'pending') {
                 self.showLoader(true);
-                if (options.showLoadingPage) {
-                    page = this.createPage(null, null, options)
-                        .addClass(this.options.loadingClass)
-                        .addClass(this.options.temporaryClass)
-                        ;
-                    this.openPage(page, $.extend({isLoadingPage : true}, options));
-                } else if (options.showLoadingPage !== null) {
-                    this.openPage(null, options); 
-                } 
+                page = this.openLoadingPage(options);
             }
 
             this._loading = deferred;
