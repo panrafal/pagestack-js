@@ -194,6 +194,12 @@ var PageStack = (function(global, $) {
                 jQuery with content
                 Deferred object */
             contentProvider : null,
+            
+            /** Selector used when extracting pages from loaded content.
+             *  NULL - will look for the same container and page selector
+             *  STRING - will look for this selector
+             *    */
+            pageParseSelector : null,
                     
             /** When enabled, container will be resized on page open and window resize. It will
                 accomodate the active page, and will use resize animation.
@@ -765,21 +771,25 @@ var PageStack = (function(global, $) {
                 // find the page in the same container
                 var $container = this.getContainer();
                 if (options.title === undefined) options.title = html.find('title:eq(0)').text();
-                data = html.find($container.attr('id') ? '#' + $container.attr('id')
-                                : (typeof this.options.container === 'string' && 
-                                        this.options.container !== 'body' ? 
-                                            this.options.container : '>*')
-                            )
-                            .find(this.options.pageSelector).eq(0)
-                            .siblings(this.options.pageSelector).addBack();
-//                if (!data || data.length === 0) {
-//                    // find first-level page and it's siblings
-//                    data = html.find(this.options.pageSelector).eq(0)
-//                            .siblings(this.options.pageSelector).addBack();
-//                }
-                // try other parts...
-                if (data.length === 0) data = html.find('body');
-                if (data.length === 0) data = html;
+                if (this.options.pageParseSelector) {
+                    data = html.find(this.options.pageParseSelector);
+                } else {
+                    data = html.find($container.attr('id') ? '#' + $container.attr('id')
+                                    : (typeof this.options.container === 'string' && 
+                                            this.options.container !== 'body' ? 
+                                                this.options.container : '>*')
+                                )
+                                .find(this.options.pageSelector).eq(0)
+                                .siblings(this.options.pageSelector).addBack();
+    //                if (!data || data.length === 0) {
+    //                    // find first-level page and it's siblings
+    //                    data = html.find(this.options.pageSelector).eq(0)
+    //                            .siblings(this.options.pageSelector).addBack();
+    //                }
+                    // try other parts...
+                    if (data.length === 0) data = html.find('body');
+                    if (data.length === 0) data = html;
+                }
                 // TODO handle multiple pages
             }
 
