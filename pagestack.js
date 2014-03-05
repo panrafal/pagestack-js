@@ -23,6 +23,7 @@ All events are namespaced with .pagestack
 * page-close(e, pagestack, options) called on page before closing
 * page-closed(e, pagestack, options) called on page after closing
 * page-destroy(e, pagestack, options) called on page just before destroying
+* firewall(e, pagestack, deferred, url, options) called on firewalled links. Deferred object should be resolve()'d or reject()'ed
 * loader-show(e, pagestack) called on container when loader is shown
 * loader-hide(e, pagestack) called on container when loader is hidden
 * destroy(e, pagestack) called on container when pagestack is destroyed
@@ -137,6 +138,8 @@ var PageStack = (function(global, $) {
             linkNextSelector : '.ps-next',
             linkPrevSelector : '.ps-prev',
             linkExternalSelector : '.ps-external',
+            /** Links with this class will first go through firewall */
+            linkFirewallSelector : '.ps-firewall',
 
             hashPrefix       : 'ps-',
 
@@ -477,6 +480,35 @@ var PageStack = (function(global, $) {
             if (page && page.length && this.options.scroll && !options.firstOpening) this.scrollIntoView(page, this.options.scroll);
         },
 
+        _handleFirewall : function(url, options) {
+            var self = this;
+            if ((options.firewall || this.options.firewall) && options.firewall !== false) {
+                var deferred = jQuery.Deferred(),
+                    sync = true;
+            
+                deferred.fail(function() {
+                    if (self.options.debug) console.log('Firewall rejected, sync:' + sync, url);
+                    self._onPageLoadError();
+                });
+                deferred.done(function() {
+                    if (self.options.debug) console.log('Firewall accepted, sync:' + sync, url);
+                    if (!sync) {
+                        // open the page...
+                        options.firewall = false;
+                        self.loadPageUrl(url, options);
+                    }
+                });
+                if (this.options.debug) console.log('Pagestack waiting for firewall', url, options);
+                this.getContainer().trigger('firewall.pagestack', [this, deferred, url, options]); 
+                sync = false;
+                if (deferred.state() === 'pending') {
+                    // we are still checking...
+                    return this.openLoadingPage(options);
+                }
+                return deferred.state() === 'resolved' ? undefined : null;
+            }
+        },
+
         /** Tries to find existing page with that URL, or resolve and load one.
             If a page is needed immediately, pass `showLoadingPage:true` in options
             @return Existing page, loading page or NULL when waiting. FALSE if URL is not supported.
@@ -486,10 +518,14 @@ var PageStack = (function(global, $) {
           */
         loadPageUrl : function(url, options) {
             if (!options) options = {};
+            
+            var firewallResult = this._handleFirewall(url, options);
+            if (firewallResult !== undefined) return firewallResult;
+            
             var page = options.reload ? null : this.getPage(url, !options.allowParents),
                 deferred, 
                 urlParts = url.match(URLPARTS_REGEX);
-
+                
             options.url = url;
             options.urlPath = urlParts[URLPART_URI];
             options.urlHash = urlParts[URLPART_HASH];
@@ -1005,6 +1041,7 @@ var PageStack = (function(global, $) {
             if (options.backward === undefined) options.backward = $link.is(this.options.linkBackwardSelector);
             if (options.history === undefined && $link.is(this.options.nohistorySelector)) options.history = false;
             if (options.temporary === undefined && $link.hasClass(this.options.temporaryClass)) options.temporary = true;
+            if (options.firewall === undefined && $link.is(this.options.linkFirewallSelector)) options.firewall = true;
 
             // check special cases
             if ($link.is(this.options.linkCloseSelector)) {
